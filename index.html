@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#0c0c0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Fleet Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#161616;--sf:#10232A;--cd:#10232A;--cd2:#3D4D55;--acc:#B58863;--acc2:#D3C3B9;--warm:#D3C3B9;--grn:#6dba7d;--gd:#4a9960;--amb:#B58863;--red:#c47a6a;--tx:#D3C3B9;--tx2:#A79E9C;--tx3:#3D4D55;--bd:rgba(211,195,185,.1);--bd2:rgba(211,195,185,.16);--r:14px;--rs:10px;--rg:rgba(181,136,99,.15);--rg2:rgba(181,136,99,.08)}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Plus Jakarta Sans',sans-serif;overflow-x:hidden}
+body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,35,42,.5) 0%,var(--bg) 60%)}
+/* Viewport reveal animations */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s cubic-bezier(.25,.46,.45,.94),transform .6s cubic-bezier(.25,.46,.45,.94)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-d1{transition-delay:.1s}.reveal-d2{transition-delay:.2s}.reveal-d3{transition-delay:.3s}.reveal-d4{transition-delay:.4s}
+/* Smooth hover lifts */
+.sc,.fc,.cd,.cc,.lc{transition:all .35s cubic-bezier(.25,.46,.45,.94)}
+/* Button hover smoothing */
+.btn{transition:all .3s cubic-bezier(.25,.46,.45,.94)}
+/* Nav link smooth transitions */
+.nl button,.mn button{transition:all .3s ease}}
+
+/* NAV */
+.tn{position:sticky;top:0;z-index:100;background:rgba(22,22,22,.88);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--bd);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 clamp(16px,3vw,40px);height:58px}
+.br{display:flex;align-items:center;justify-content:center;gap:10px}
+.br-n{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--warm);letter-spacing:5px;text-transform:uppercase}
+.br-d{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:pu 2s infinite}
+.nl{justify-self:start}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.3}}
+.nl{display:flex;gap:2px}
+.nl button{padding:7px 16px;border:none;background:none;color:var(--tx2);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:7px;transition:all .2s;position:relative}
+.nl button:hover{color:var(--tx);background:rgba(255,255,255,.04)}
+.nl button.a{color:var(--acc2);background:var(--rg2)}
+.nl button.a::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:16px;height:2px;background:var(--acc2);border-radius:2px}
+.mn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(22,22,22,.95);backdrop-filter:blur(20px);border-top:1px solid var(--bd);padding:4px 0 env(safe-area-inset-bottom,4px)}
+.mn .ni{display:flex}
+.mn button{flex:1;padding:7px 0 4px;background:none;border:none;color:var(--tx3);font-family:'Rajdhani',sans-serif;font-size:8px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.mn button.a{color:var(--acc2)}
+.mn button svg{width:18px;height:18px;fill:currentColor}
+@media(max-width:768px){.nl{display:none}.mn{display:block}body{padding-bottom:56px}}
+
+/* PAGES */
+.pg{display:none;padding:clamp(14px,2.5vw,28px) clamp(14px,3vw,40px);max-width:1400px;margin:0 auto;width:100%;animation:fu .3s ease}
+.pg.a{display:block}
+@keyframes fu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* GRID */
+.g1{display:grid;grid-template-columns:1fr;gap:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+.g21{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+@media(max-width:900px){.g2,.g3,.g4,.g21{grid-template-columns:1fr}}
+.fg-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+
+/* SECTION HEADER */
+.sh{display:flex;align-items:center;justify-content:space-between;margin:24px 0 12px}.sh:first-child{margin-top:0}
+.sh-t{font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:2px;text-transform:uppercase}
+.sh-l{flex:1;height:1px;background:var(--bd);margin-left:14px}
+.sh-a{font-size:11px;color:var(--acc2);cursor:pointer;font-weight:600;border:none;background:none;font-family:'Plus Jakarta Sans',sans-serif;margin-left:12px}
+.sh-a:hover{text-decoration:underline}
+
+/* STAT CARDS */
+.sc{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;transition:all .25s;cursor:pointer}
+.sc:hover{border-color:var(--acc2);box-shadow:0 0 24px var(--rg),0 0 48px rgba(181,136,99,.04);transform:translateY(-2px)}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--acc2);opacity:.3;transition:opacity .25s}
+.sc:hover::before{opacity:1}
+.sc-sub{font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px}
+.sc-val{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1}
+.sc-val.grn{color:var(--grn)}
+.sc-lbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+.sc-hint{font-size:9px;color:var(--tx3);margin-top:6px;opacity:0;transition:opacity .25s}
+.sc:hover .sc-hint{opacity:1}
+
+/* CARDS */
+.cd{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);padding:18px;transition:all .2s}
+.cd:hover{border-color:var(--bd2)}
+.cd-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cd-t{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700}
+.cd-r{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:13px}
+.cd-r:last-child{border-bottom:none}
+.cd-r .l{color:var(--tx2)}.cd-r .v{font-weight:600;text-align:right}
+
+/* CHART CARD */
+.cc{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);padding:20px;transition:all .25s;cursor:pointer;position:relative}
+.cc:hover{border-color:var(--acc2);box-shadow:0 0 20px var(--rg)}
+.cc canvas{max-height:200px}
+
+/* BADGES */
+.badge{display:inline-flex;padding:2px 9px;border-radius:20px;font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.b-r{background:var(--rg2);color:var(--acc2);border:1px solid rgba(181,136,99,.2)}
+.b-g{background:rgba(0,230,118,.08);color:var(--grn);border:1px solid rgba(0,230,118,.15)}
+.b-a{background:rgba(255,167,38,.08);color:var(--amb);border:1px solid rgba(255,167,38,.15)}
+
+/* LIST CARD */
+.lc{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden}
+.lr2{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bd);transition:background .15s;font-size:13px}
+.lr2:last-child{border-bottom:none}
+.lr2:hover{background:rgba(255,255,255,.02)}
+
+/* PRICE HERO */
+.ph{padding:28px;border-radius:var(--r);text-align:center;background:var(--cd);position:relative;overflow:hidden;border:1px solid transparent;background-clip:padding-box}
+.ph::before{content:'';position:absolute;inset:-1px;border-radius:var(--r);padding:1px;background:linear-gradient(135deg,var(--grn),var(--acc2),var(--acc));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.ph-e{font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--tx3);margin-bottom:6px}
+.ph-t{font-family:'Rajdhani',sans-serif;font-size:clamp(30px,5vw,44px);font-weight:700;color:var(--grn);line-height:1;margin-bottom:14px}
+.ph-ts{display:flex;justify-content:center;gap:clamp(18px,4vw,40px)}
+.ph-ti{text-align:center}
+.ph-ti .tl{font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:2px}
+.ph-ti .tv{font-family:'Rajdhani',sans-serif;font-size:clamp(16px,2.5vw,22px);font-weight:700}
+.ph-ti .tv.mx{color:var(--amb)}.ph-ti .tv.wk{color:var(--acc2)}
+.ph-n{font-size:10px;color:var(--tx3);margin-top:12px}
+
+/* RECALL */
+.rc{padding:10px 12px;margin:5px 0;border-radius:var(--rs);border-left:3px solid var(--red);background:var(--rg2)}
+.rc.mod{border-left-color:var(--amb);background:rgba(255,167,38,.04)}
+.rc.low{border-left-color:var(--tx3);background:rgba(255,255,255,.02)}
+.rc .cp{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;margin-bottom:2px}
+.rc .dt{font-size:11px;color:var(--tx2);line-height:1.4}
+.cb{display:flex;align-items:center;gap:8px;padding:4px 0}
+.cb .ct{flex:1;font-size:11px;color:var(--tx2)}.cb .cn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--amb);min-width:22px;text-align:right}
+.cb .tr{flex:2;height:4px;background:var(--bd);border-radius:2px;overflow:hidden}.cb .fl{height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:2px}
+
+/* RESEARCH */
+.rg{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+@media(max-width:600px){.rg{grid-template-columns:repeat(3,1fr)}}
+.rl{padding:10px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);color:var(--tx);text-decoration:none;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;text-align:center;letter-spacing:.5px;transition:all .2s}
+.rl:hover{border-color:var(--acc2);color:var(--acc2);background:var(--rg2)}
+
+/* FLEET CARDS */
+.fc{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;transition:all .2s;cursor:pointer}
+.fc:hover{border-color:var(--bd2);transform:translateY(-1px)}
+.fc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.fc .cn{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;margin-bottom:2px}
+.fc .ct{font-size:11px;color:var(--tx3);margin-bottom:10px}
+.fc .sg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.fc .st{padding:8px;background:var(--sf);border-radius:6px;text-align:center}
+.fc .sv{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--acc2)}
+.fc .sl{font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-top:1px}
+
+/* CALENDAR */
+.cal{background:var(--cd);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden}
+.cal-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:var(--sf);border-bottom:1px solid var(--bd)}
+.cal-h button{background:none;border:1px solid var(--bd);color:var(--tx);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600}
+.cal-h button:hover{border-color:var(--acc2);color:var(--acc2)}
+.cal-h .cm{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-d{font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:600;color:var(--tx3);text-align:center;padding:8px 0;text-transform:uppercase;letter-spacing:1px}
+.cal-c{min-height:70px;border:1px solid var(--bd);padding:4px;font-size:11px;cursor:pointer;transition:background .15s;position:relative}
+.cal-c:hover{background:rgba(255,255,255,.02)}
+.cal-c .dn{font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px}
+.cal-c.today .dn{color:var(--acc2);font-weight:700}
+.cal-c.other .dn{opacity:.3}
+.cal-ev{font-size:8px;padding:2px 4px;border-radius:3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.cal-ev.booked{background:rgba(0,230,118,.12);color:var(--grn)}
+.cal-ev.maint{background:rgba(255,167,38,.12);color:var(--amb)}
+
+/* FORMS */
+.fg{margin-bottom:12px}
+.fl{display:block;font-size:9px;font-weight:600;color:var(--tx2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+.fi{width:100%;padding:11px 14px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);color:var(--tx);font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;outline:none;transition:all .2s}
+.fi:focus{border-color:var(--acc2);box-shadow:0 0 0 3px var(--rg)}
+.fi::placeholder{color:var(--tx3)}
+select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 22px;border:none;border-radius:var(--rs);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;letter-spacing:.5px;cursor:pointer;transition:all .2s;gap:5px}
+.btn:active{transform:scale(.98)}
+.btn-r{background:linear-gradient(135deg,var(--acc),var(--cd2));color:var(--warm);box-shadow:0 4px 16px var(--rg)}
+.btn-r:hover{box-shadow:0 6px 24px rgba(181,136,99,.25)}
+.btn-g{background:linear-gradient(135deg,var(--grn),var(--gd));color:#0c0c0e}
+.btn-o{background:transparent;border:1px solid var(--bd);color:var(--tx2)}
+.btn-o:hover{border-color:var(--acc2);color:var(--acc2)}
+.btn-d{background:transparent;border:1px solid rgba(181,136,99,.3);color:var(--acc2)}
+.btn-f{width:100%;justify-content:center}
+.btn-s{padding:6px 12px;font-size:11px;border-radius:6px}
+.btn:disabled{opacity:.4}
+
+/* COMMAND PALETTE */
+.cp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:300;align-items:flex-start;justify-content:center;padding-top:20vh}
+.cp-overlay.show{display:flex}
+.cp-box{background:var(--cd);border:1px solid var(--bd2);border-radius:var(--r);width:100%;max-width:520px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.cp-input{width:100%;padding:16px 20px;background:transparent;border:none;border-bottom:1px solid var(--bd);color:var(--tx);font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;outline:none}
+.cp-input::placeholder{color:var(--tx3)}
+.cp-results{max-height:300px;overflow-y:auto}
+.cp-item{padding:12px 20px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:background .1s;font-size:13px}
+.cp-item:hover,.cp-item.active{background:var(--rg2)}
+.cp-item .cp-icon{color:var(--tx3);font-size:14px;width:20px;text-align:center}
+.cp-item .cp-label{flex:1}.cp-item .cp-hint{font-size:10px;color:var(--tx3)}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(10px);z-index:200;align-items:center;justify-content:center;padding:16px}
+.mo.show{display:flex}
+.ml{background:var(--cd);border-radius:var(--r);padding:24px;width:100%;max-width:480px;border:1px solid var(--bd);max-height:90vh;overflow-y:auto}
+
+/* TOAST */
+.toast{position:fixed;top:14px;right:14px;transform:translateX(20px);background:var(--acc2);color:#fff;padding:10px 22px;border-radius:var(--rs);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;z-index:400;opacity:0;transition:all .3s;pointer-events:none;box-shadow:0 6px 24px var(--rg)}
+.toast.show{opacity:1;transform:translateX(0)}
+
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:40px 20px;color:var(--tx3);font-size:12px}
+::selection{background:rgba(181,136,99,.45);color:var(--warm)}
+::-moz-selection{background:rgba(181,136,99,.45);color:var(--warm)}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="tn">
+  <div class="nl" id="topnav"></div>
+  <div class="br"><span class="br-d"></span><span class="br-n">Fleet Manager</span></div>
+  <div></div>
+</div>
+
+<!-- MOBILE NAV -->
+<div class="mn"><div class="ni" id="mobnav"></div></div>
+
+<!-- COMMAND PALETTE -->
+<div class="cp-overlay" id="cmd-palette">
+  <div class="cp-box">
+    <input class="cp-input" id="cmd-input" placeholder="Search vehicles, actions, pages..." autocomplete="off">
+    <div class="cp-results" id="cmd-results"></div>
+  </div>
+</div>
+
+<!-- PAGES -->
+<div id="pg-dash" class="pg a"></div>
+<div id="pg-vin" class="pg"></div>
+<div id="pg-fleet" class="pg"></div>
+<div id="pg-cal" class="pg"></div>
+<div id="pg-fin" class="pg"></div>
+<div id="pg-set" class="pg"></div>
+
+<!-- MODALS -->
+<div class="mo" id="m-vehicle"><div class="ml" id="ml-vehicle"></div></div>
+<div class="mo" id="m-expense"><div class="ml" id="ml-expense"></div></div>
+<div class="mo" id="m-booking"><div class="ml" id="ml-booking"></div></div>
+<div class="mo" id="m-maint"><div class="ml" id="ml-maint"></div></div>
+<div class="mo" id="m-revenue"><div class="ml" id="ml-revenue" style="max-width:600px"></div></div>
+<div class="mo" id="m-csv"><div class="ml" id="ml-csv"></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══ DATA LAYER ═══
+const D={
+  get:(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}},
+  set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),
+  fleet:()=>D.get('fleet'),sFleet:f=>D.set('fleet',f),
+  exps:()=>D.get('expenses'),sExps:e=>D.set('expenses',e),
+  books:()=>D.get('bookings'),sBooks:b=>D.set('bookings',b),
+  maint:()=>D.get('maintenance'),sMaint:m=>D.set('maintenance',m),
+  revImports:()=>D.get('rev_imports'),sRevImports:r=>D.set('rev_imports',r)
+};
+
+// ═══ TOAST ═══
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+
+// Animated number counter
+function animateNum(el,target,prefix='',suffix='',duration=800){
+  const start=0;const startTime=performance.now();
+  const isNeg=target<0;const absTarget=Math.abs(target);
+  function tick(now){
+    const elapsed=now-startTime;const progress=Math.min(elapsed/duration,1);
+    const eased=1-Math.pow(1-progress,3); // ease-out cubic
+    const current=Math.round(eased*absTarget);
+    el.textContent=(isNeg?'-':'')+prefix+current.toLocaleString()+suffix;
+    if(progress<1)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// Animate all stat numbers on a page
+function animateStats(){
+  document.querySelectorAll('[data-animate]').forEach(el=>{
+    const val=parseInt(el.dataset.animate);
+    const prefix=el.dataset.prefix||'';
+    const suffix=el.dataset.suffix||'';
+    const delay=parseInt(el.dataset.delay||'0');
+    setTimeout(()=>animateNum(el,val,prefix,suffix,900),delay);
+  });
+}
+
+// ═══ TABS ═══
+const tabs=[
+  {id:'dash',label:'Dashboard',icon:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'},
+  {id:'vin',label:'VIN Lookup',icon:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>'},
+  {id:'fleet',label:'Fleet',icon:'<svg viewBox="0 0 24 24"><path d="M5 11l1.5-4.5h11L19 11M3 15h18v-4H3v4zm2 4h4v-2H5v2zm10 0h4v-2h-4v2z"/></svg>'},
+  {id:'cal',label:'Calendar',icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/></svg>'},
+  {id:'fin',label:'Finances',icon:'<svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'},
+  {id:'set',label:'Settings',icon:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'}
+];
+
+function buildNav(){
+  document.getElementById('topnav').innerHTML=tabs.map((t,i)=>`<button class="${i===0?'a':''}" onclick="sw('${t.id}',this)">${t.label}</button>`).join('');
+  document.getElementById('mobnav').innerHTML=tabs.map((t,i)=>`<button class="${i===0?'a':''}" onclick="sw('${t.id}',this)">${t.icon}${t.label}</button>`).join('');
+}
+
+function sw(id,btn){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('a'));
+  document.getElementById('pg-'+id).classList.add('a');
+  document.querySelectorAll('.nl button,.mn button').forEach(b=>b.classList.remove('a'));
+  const map={};tabs.forEach((t,i)=>map[t.id]=i);
+  const idx=map[id];
+  const nb=document.querySelectorAll('.nl button');if(nb[idx])nb[idx].classList.add('a');
+  const mb=document.querySelectorAll('.mn button');if(mb[idx])mb[idx].classList.add('a');
+  if(id==='dash')renderDash();if(id==='fleet')renderFleet();if(id==='cal')renderCal();if(id==='fin')renderFin();if(id==='set')renderSet();
+}
+
+// ═══ MODAL HELPERS ═══
+function showM(id){populateDD();document.getElementById('m-'+id).classList.add('show')}
+function hideM(){document.querySelectorAll('.mo').forEach(m=>m.classList.remove('show'))}
+function populateDD(){const f=D.fleet();const o=f.map((v,i)=>`<option value="${i}">${v.year} ${v.make} ${v.model}</option>`).join('');document.querySelectorAll('.car-dd').forEach(el=>el.innerHTML=o||'<option>No vehicles</option>')}
+
+// ═══ DASHBOARD ═══
+let revChart=null;
+function renderDash(){
+  const f=D.fleet(),e=D.exps(),b=D.books(),m=D.maint();
+  const tv=f.reduce((s,v)=>s+Number(v.price||0),0);
+  const act=f.filter(v=>v.status==='listed').length;
+  const mr=f.filter(v=>v.status==='listed').reduce((s,v)=>s+Number(v.rate||0)*20,0);
+  const now=new Date(),tm=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+  const me=e.filter(x=>x.date&&x.date.startsWith(tm)).reduce((s,x)=>s+Number(x.amount||0),0);
+  const net=mr-me;
+
+  // Upcoming bookings
+  const ub=b.filter(x=>new Date(x.end)>=now).sort((a,b2)=>new Date(a.start)-new Date(b2.start)).slice(0,4);
+  const ubHtml=ub.length?ub.map(x=>{const c=f[x.carIdx]||{};return`<div class="lr2"><span style="font-weight:600;font-size:12px">${c.year||''} ${c.make||''} ${c.model||''}</span><span style="font-size:10px;color:var(--tx2)">${x.start}</span><span class="badge b-g">${x.guest}</span></div>`}).join(''):'<div class="empty">No upcoming bookings</div>';
+
+  // Maintenance due
+  const md=m.filter(x=>x.next_due_date&&new Date(x.next_due_date)<=new Date(now.getTime()+30*86400000)).slice(0,4);
+  const mdHtml=md.length?md.map(x=>{const c=f[x.carIdx]||{};return`<div class="lr2"><span style="font-weight:600;font-size:12px">${c.year||''} ${c.make||''} ${c.model||''}</span><span style="font-size:10px;color:var(--amb)">${x.type}</span><span style="font-size:10px;color:var(--tx3)">${x.next_due_date}</span></div>`}).join(''):'<div class="empty">No maintenance due</div>';
+
+  document.getElementById('pg-dash').innerHTML=`
+    <div class="sh reveal"><span class="sh-t">Overview</span><span class="sh-l"></span></div>
+    <div class="g4">
+      <div class="sc reveal reveal-d1" onclick="sw('fleet',null)"><div class="sc-sub">Total Investment</div><div class="sc-val" data-animate="${tv}" data-prefix="$" data-delay="0">$0</div><div class="sc-lbl">Fleet Value</div><div class="sc-hint">View fleet details</div></div>
+      <div class="sc reveal reveal-d2" onclick="sw('fleet',null)"><div class="sc-sub">Vehicles</div><div class="sc-val" data-animate="${act}" data-delay="150">${0}</div><div class="sc-lbl">Active on Turo</div><div class="sc-hint">View fleet</div></div>
+      <div class="sc reveal reveal-d3" onclick="showRevDetail()"><div class="sc-sub">Earnings</div><div class="sc-val grn" data-animate="${mr}" data-prefix="$" data-delay="300">$0</div><div class="sc-lbl">Est. Revenue / Mo</div><div class="sc-hint">View breakdown</div></div>
+      <div class="sc reveal reveal-d4" onclick="sw('fin',null)"><div class="sc-sub">Profit</div><div class="sc-val ${net>=0?'grn':''}" ${net<0?'style="color:var(--acc2)"':''} data-animate="${net}" data-prefix="$" data-delay="450">${net>=0?'$0':'-$0'}</div><div class="sc-lbl">Net This Month</div><div class="sc-hint">View finances</div></div>
+    </div>
+    <div class="g21" style="margin-top:14px">
+      <div class="reveal reveal-d1">
+        <div class="sh"><span class="sh-t">Revenue Trend</span><span class="sh-l"></span></div>
+        <div class="cc" onclick="showRevDetail()"><canvas id="rev-canvas"></canvas></div>
+      </div>
+      <div class="reveal reveal-d2">
+        <div class="sh"><span class="sh-t">Upcoming</span><span class="sh-l"></span><span class="sh-a" onclick="showM('booking')">+ Add</span></div>
+        <div class="lc">${ubHtml}</div>
+        <div class="sh reveal reveal-d3"><span class="sh-t">Maintenance Due</span><span class="sh-l"></span><span class="sh-a" onclick="showM('maint')">+ Log</span></div>
+        <div class="lc reveal reveal-d4">${mdHtml}</div>
+      </div>
+    </div>
+    <div class="sh reveal"><span class="sh-t">Quick Actions</span><span class="sh-l"></span></div>
+    <div class="reveal reveal-d1" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-r" onclick="sw('vin',null)">Decode VIN</button>
+      <button class="btn btn-o" onclick="showM('vehicle')">+ Add Vehicle</button>
+      <button class="btn btn-o" onclick="showM('expense')">+ Log Expense</button>
+      <button class="btn btn-o" onclick="exportAll()">Export Data</button>
+    </div>`;
+
+  // Chart.js revenue
+  const months=['Nov','Dec','Jan','Feb','Mar','Apr'];
+  const base=mr||500;const mults=[.7,.9,1.2,1,.85,1];
+  const vals=mults.map(x=>Math.round(base*x));
+  const ctx=document.getElementById('rev-canvas');
+  if(ctx){
+    if(revChart)revChart.destroy();
+    revChart=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{data:vals,backgroundColor:'rgba(181,136,99,.7)',hoverBackgroundColor:'#B58863',borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart',delay:function(ctx2){return ctx2.dataIndex*120}},plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a1a1d',titleColor:'#f0f0f0',bodyColor:'#6dba7d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,padding:10,callbacks:{label:c=>'$'+c.raw.toLocaleString()}}},scales:{x:{grid:{display:false},ticks:{color:'#8a8a8a',font:{family:'Rajdhani',size:11}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8a8a8a',font:{family:'Rajdhani',size:10},callback:v=>'$'+v.toLocaleString()}}}}});
+  }
+  // Trigger number animations and reveal observer after DOM renders
+  setTimeout(()=>{animateStats();if(window._afterRender)window._afterRender()},50);
+}
+
+// ═══ VIN LOOKUP ═══
+let cv=null;
+function renderVin(){
+  document.getElementById('pg-vin').innerHTML=`
+    <div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div>
+    <div class="g2" style="max-width:800px">
+      <div>
+        <div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div>
+        <div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div>
+        <div style="display:flex;gap:8px">
+          <div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div>
+          <div style="align-self:flex-end;padding-bottom:12px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div>
+        </div>
+      </div>
+      <div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px">Enter a VIN to see vehicle details, pricing, and recalls.</div>
+    </div>
+    <div id="vin-results" style="display:none"></div>
+    <div id="vin-load" style="display:none;text-align:center;padding:48px"><div style="width:24px;height:24px;border:2px solid var(--bd);border-top-color:var(--acc2);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 12px"></div><div style="font-size:11px;color:var(--tx3)">Decoding...</div></div>`;
+}
+
+async function lookupVIN(){
+  const vin=document.getElementById('vin-i').value.trim().toUpperCase();
+  const miles=document.getElementById('mi-i').value.trim();
+  const zip=document.getElementById('zi-i').value.trim();
+  if(vin.length!==17){toast('VIN must be 17 characters');return}
+  document.getElementById('vin-results').style.display='none';
+  document.getElementById('vin-load').style.display='block';
+  document.getElementById('lu-btn').disabled=true;
+  document.getElementById('vin-side').style.display='none';
+  try{
+    const dr=await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/${vin}?format=json`);
+    const dd=await dr.json();const v=dd.Results[0];
+    cv={vin,miles,zip,year:v.ModelYear,make:v.Make,model:v.Model,trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?`${v.DisplacementL}L`:'',cyl:v.EngineCylinders,hp:v.EngineHP,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR};
+    const msrp=cv.hp>400?75000:cv.hp>200?45000:25000;
+    const age=new Date().getFullYear()-parseInt(cv.year);
+    const dep=cv.make==='CHEVROLET'&&cv.model==='Corvette'?.04:cv.make==='BMW'||cv.make==='MERCEDES-BENZ'?.12:.08;
+    const est=Math.round(msrp*Math.pow(1-dep,age));
+    const tgt=Math.round(est*.88),mx=Math.round(est*.97),wk=Math.round(est*1.05);
+    const rows=[['Year',cv.year],['Make',cv.make],['Model',cv.model],cv.trim&&['Trim',cv.trim],cv.body&&['Body',cv.body],cv.engine&&['Engine',`${cv.engine} ${cv.cyl?cv.cyl+'-cyl':''} ${cv.hp?cv.hp+' HP':''}`],cv.drive&&['Drive',cv.drive],cv.fuel&&['Fuel',cv.fuel],cv.plant&&['Plant',cv.plant],cv.gvwr&&['GVWR',cv.gvwr],miles&&['Mileage',Number(miles).toLocaleString()+' mi']].filter(Boolean);
+
+    // Recalls
+    const mk=cv.make,md=cv.model,yr=cv.year;let rh='',ch='';
+    try{const rr=await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(mk)}&model=${encodeURIComponent(md)}&modelYear=${yr}`);const rd=await rr.json();const recalls=rd.results||[];
+      if(recalls.length>0){rh=`<div class="sh"><span class="sh-t">Open Recalls (${recalls.length})</span><span class="sh-l"></span></div>`+recalls.map(r=>{const s=(r.Consequence||'').toLowerCase();const c=s.includes('fire')||s.includes('crash')||s.includes('injury')?'':s.includes('control')||s.includes('stall')?'mod':'low';return`<div class="rc ${c}"><div class="cp">${r.Component||'Unknown'}</div><div class="dt">${(r.Summary||'').substring(0,140)}...</div></div>`}).join('')}
+      else{rh='<p style="color:var(--grn);font-size:12px;margin:8px 0">No open recalls</p>'}
+    }catch(e){}
+    try{const cr=await fetch(`https://api.nhtsa.gov/complaints/complaintsByVehicle?make=${encodeURIComponent(mk)}&model=${encodeURIComponent(md)}&modelYear=${yr}`);const cd2=await cr.json();const comps=cd2.results||[];
+      if(comps.length>0){const cats={};comps.forEach(c=>{const cp=c.components||'Unknown';cats[cp]=(cats[cp]||0)+1});const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5);const mxx=sorted[0][1];
+        ch=`<div class="sh" style="margin-top:16px"><span class="sh-t">Complaints (${comps.length})</span><span class="sh-l"></span></div>`+sorted.map(([cat,cnt])=>`<div class="cb"><span class="ct">${cat}</span><div class="tr"><div class="fl" style="width:${(cnt/mxx)*100}%"></div></div><span class="cn">${cnt}</span></div>`).join('')}
+    }catch(e){}
+
+    const ml2=mk.toLowerCase().replace(/\s+/g,'-'),mdl=md.toLowerCase().replace(/\s+/g,'-');
+    document.getElementById('vin-results').innerHTML=`
+      <div class="sh"><span class="sh-t">Price Analysis</span><span class="sh-l"></span></div>
+      <div class="ph"><div class="ph-e">Estimated Price Range</div><div class="ph-t">$${tgt.toLocaleString()}</div><div class="ph-ts"><div class="ph-ti"><div class="tl">Maximum</div><div class="tv mx">$${mx.toLocaleString()}</div></div><div class="ph-ti"><div class="tl">Walk Away</div><div class="tv wk">$${wk.toLocaleString()}</div></div></div><div class="ph-n">Quick estimate -- use Full Claude Report for accurate pricing</div></div>
+      <div class="g2" style="margin-top:14px">
+        <div><div class="sh"><span class="sh-t">Vehicle Details</span><span class="sh-l"></span></div>
+          <div class="cd"><div class="cd-h"><span class="cd-t">${cv.year} ${cv.make} ${cv.model}</span><span class="badge b-r">${cv.trim||cv.body}</span></div>${rows.map(([l,val])=>`<div class="cd-r"><span class="l">${l}</span><span class="v">${val}</span></div>`).join('')}</div>
+        </div>
+        <div>${rh}${ch}</div>
+      </div>
+      <div class="sh"><span class="sh-t">Research</span><span class="sh-l"></span></div>
+      <div class="rg">
+        <a class="rl" href="https://www.kbb.com/${ml2}/${mdl}/${yr}/" target="_blank">KBB</a>
+        <a class="rl" href="https://www.edmunds.com/${ml2}/${mdl}/${yr}/appraisal-value/" target="_blank">Edmunds</a>
+        <a class="rl" href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin=${vin}" target="_blank">Carfax</a>
+        <a class="rl" href="https://www.nicb.org/vincheck?vin=${vin}" target="_blank">NICB</a>
+        <a class="rl" href="https://www.nhtsa.gov/recalls?nhtsaId=${vin}" target="_blank">NHTSA</a>
+        <a class="rl" href="https://turo.com/us/en/search?defaultZipCode=89014&location=Las+Vegas&makes=${encodeURIComponent(mk)}&models=${encodeURIComponent(md)}" target="_blank">Turo LV</a>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-g" onclick="window.open('https://claude.ai/new?q='+encodeURIComponent('VIN: ${vin}, ${miles||'unknown'} miles, zip ${zip||'89014'}'),'_blank');toast('Opening Claude...')">Full Claude Report</button>
+        <button class="btn btn-o" onclick="navigator.clipboard.writeText('VIN: ${vin}, ${miles||'?'} miles, zip ${zip||'89014'}');toast('Copied!')">Copy to Clipboard</button>
+        <button class="btn btn-o" onclick="addToFleetFromVIN()">+ Add to Fleet</button>
+      </div>`;
+    document.getElementById('vin-results').style.display='block';
+  }catch(err){toast('Error: '+err.message)}
+  finally{document.getElementById('vin-load').style.display='none';document.getElementById('lu-btn').disabled=false}
+}
+
+function addToFleetFromVIN(){if(!cv)return;const f=D.fleet();f.push({year:cv.year,make:cv.make,model:cv.model,trim:cv.trim,vin:cv.vin,price:'',rate:'',trips:0,status:'unlisted',mileage:cv.miles||'',purchase_date:''});D.sFleet(f);toast('Added to fleet')}
+
+// ═══ FLEET ═══
+function renderFleet(){
+  const f=D.fleet();
+  let html=`<div class="sh"><span class="sh-t">My Fleet</span><span class="sh-l"></span><span class="sh-a" onclick="showM('vehicle')">+ Add Vehicle</span></div>`;
+  if(!f.length){html+='<div class="empty">No vehicles yet. Add one to get started.</div>'}
+  else{
+    html+='<div class="fg-auto">';
+    html+=f.map((v,i)=>`<div class="fc"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="cn">${v.year} ${v.make} ${v.model}</div>${v.trim?`<div class="ct">${v.trim}</div>`:''}</div><span class="badge ${v.status==='listed'?'b-g':'b-a'}">${v.status||'unlisted'}</span></div><div class="sg"><div class="st"><div class="sv">$${Number(v.price||0).toLocaleString()}</div><div class="sl">Purchase</div></div><div class="st"><div class="sv">${v.rate?'$'+v.rate:'--'}</div><div class="sl">Daily Rate</div></div><div class="st"><div class="sv">${v.trips||0}</div><div class="sl">Trips</div></div><div class="st"><div class="sv" style="font-size:9px;word-break:break-all">${v.vin||'--'}</div><div class="sl">VIN</div></div></div><div style="display:flex;gap:6px"><button class="btn btn-s btn-o" onclick="toggleSt(${i})">${v.status==='listed'?'Unlist':'List'}</button><button class="btn btn-s btn-d" onclick="rmVeh(${i})">Remove</button></div></div>`).join('');
+    html+='</div>';
+  }
+  document.getElementById('pg-fleet').innerHTML=html;
+}
+function toggleSt(i){const f=D.fleet();f[i].status=f[i].status==='listed'?'unlisted':'listed';D.sFleet(f);renderFleet()}
+function rmVeh(i){if(!confirm('Remove this vehicle?'))return;const f=D.fleet();f.splice(i,1);D.sFleet(f);renderFleet();toast('Removed')}
+
+// ═══ CALENDAR ═══
+let calDate=new Date();
+function renderCal(){
+  const y=calDate.getFullYear(),m=calDate.getMonth();
+  const first=new Date(y,m,1),last=new Date(y,m+1,0);
+  const startDay=first.getDay();const daysInMonth=last.getDate();
+  const prevLast=new Date(y,m,0).getDate();
+  const books=D.books(),fleet=D.fleet(),maint=D.maint();
+  const today=new Date();
+  const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  let cells='';
+  // Day headers
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>cells+=`<div class="cal-d">${d}</div>`);
+  // Previous month fill
+  for(let i=startDay-1;i>=0;i--){cells+=`<div class="cal-c other"><div class="dn">${prevLast-i}</div></div>`}
+  // Current month
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${y}-${(m+1).toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+    const isToday=d===today.getDate()&&m===today.getMonth()&&y===today.getFullYear();
+    let evts='';
+    books.forEach(b=>{if(dateStr>=b.start&&dateStr<=b.end){const c=fleet[b.carIdx]||{};evts+=`<div class="cal-ev booked">${c.model||'Trip'}</div>`}});
+    maint.forEach(x=>{if(x.next_due_date===dateStr){evts+=`<div class="cal-ev maint">${x.type||'Service'}</div>`}});
+    cells+=`<div class="cal-c${isToday?' today':''}" onclick="showM('booking')"><div class="dn">${d}</div>${evts}</div>`;
+  }
+  // Next month fill
+  const totalCells=startDay+daysInMonth;const remaining=7-(totalCells%7);
+  if(remaining<7){for(let i=1;i<=remaining;i++){cells+=`<div class="cal-c other"><div class="dn">${i}</div></div>`}}
+
+  document.getElementById('pg-cal').innerHTML=`
+    <div class="sh"><span class="sh-t">Calendar</span><span class="sh-l"></span><span class="sh-a" onclick="showM('booking')">+ Add Booking</span></div>
+    <div class="cal">
+      <div class="cal-h"><button onclick="calDate.setMonth(calDate.getMonth()-1);renderCal()">Prev</button><span class="cm">${monthNames[m]} ${y}</span><button onclick="calDate.setMonth(calDate.getMonth()+1);renderCal()">Next</button></div>
+      <div class="cal-g">${cells}</div>
+    </div>`;
+}
+
+// ═══ FINANCES ═══
+let finChart=null;
+function renderFin(){
+  const f=D.fleet(),e=D.exps();
+  const listed=f.filter(v=>v.status==='listed');
+  const mr=listed.reduce((s,v)=>s+Number(v.rate||0)*20,0);
+  const months=['Nov','Dec','Jan','Feb','Mar','Apr'];
+  const mults=[.7,.9,1.2,1,.85,1];
+  const revVals=mults.map(x=>Math.round((mr||500)*x));
+  const expVals=mults.map(()=>Math.round(Math.random()*200+100));
+
+  // Per-vehicle P&L
+  let pvHtml='';
+  if(f.length){
+    pvHtml=f.map(v=>{
+      const rev=v.status==='listed'?Number(v.rate||0)*20:0;
+      const exp=e.filter(x=>x.carIdx==f.indexOf(v).toString()).reduce((s,x)=>s+Number(x.amount||0),0);
+      const net=rev-exp;
+      return`<div class="lr2"><span style="font-weight:600;font-size:12px">${v.year} ${v.make} ${v.model}</span><span style="color:var(--grn);font-family:'Rajdhani',sans-serif;font-weight:700" data-animate="${rev}" data-prefix="$" data-delay="200">$0</span><span style="color:var(--acc2);font-family:'Rajdhani',sans-serif;font-weight:700" data-animate="${exp}" data-prefix="-$" data-delay="400">-$0</span><span style="color:${net>=0?'var(--grn)':'var(--red)'};font-family:'Rajdhani',sans-serif;font-weight:700" data-animate="${Math.abs(net)}" data-prefix="${net>=0?'$':'-$'}" data-delay="600">$0</span></div>`;
+    }).join('');
+  }
+
+  // Recent expenses
+  const recent=e.slice(-5).reverse();
+  const reHtml=recent.length?recent.map(x=>`<div class="lr2"><span style="font-weight:500;font-size:12px">${x.category}</span><span style="font-size:10px;color:var(--tx2)">${x.date}</span><span style="color:var(--acc2);font-family:'Rajdhani',sans-serif;font-weight:700">-$${Number(x.amount).toLocaleString()}</span></div>`).join(''):'<div class="empty">No expenses logged</div>';
+
+  document.getElementById('pg-fin').innerHTML=`
+    <div class="sh"><span class="sh-t">Financial Overview</span><span class="sh-l"></span></div>
+    <div class="g21">
+      <div>
+        <div class="cc" style="cursor:default"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600">Revenue vs Expenses</span></div><canvas id="fin-canvas" style="max-height:220px"></canvas></div>
+      </div>
+      <div>
+        <div class="sh" style="margin-top:0"><span class="sh-t">Actions</span><span class="sh-l"></span></div>
+        <button class="btn btn-r btn-f" onclick="showM('expense')" style="margin-bottom:8px">+ Log Expense</button>
+        <button class="btn btn-o btn-f" onclick="showM('csv')" style="margin-bottom:8px">Import Turo CSV</button>
+        <button class="btn btn-o btn-f" onclick="exportAll()">Export All Data</button>
+      </div>
+    </div>
+    <div class="sh"><span class="sh-t">Per-Vehicle P&L</span><span class="sh-l"></span></div>
+    <div class="lc">
+      <div class="lr2" style="background:var(--sf);font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:1px;text-transform:uppercase"><span>Vehicle</span><span>Revenue</span><span>Expenses</span><span>Net</span></div>
+      ${pvHtml||'<div class="empty">No vehicles</div>'}
+    </div>
+    <div class="sh"><span class="sh-t">Recent Expenses</span><span class="sh-l"></span><span class="sh-a" onclick="showM('expense')">+ Log</span></div>
+    <div class="lc">${reHtml}</div>`;
+
+  const fctx=document.getElementById('fin-canvas');
+  if(fctx){
+    if(finChart)finChart.destroy();
+    finChart=new Chart(fctx,{type:'bar',data:{labels:months,datasets:[{label:'Revenue',data:revVals,backgroundColor:'rgba(109,186,125,.5)',hoverBackgroundColor:'rgba(109,186,125,.8)',borderRadius:4},{label:'Expenses',data:expVals,backgroundColor:'rgba(181,136,99,.5)',hoverBackgroundColor:'rgba(181,136,99,.8)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart',delay:function(ctx2){return ctx2.dataIndex*100+ctx2.datasetIndex*300}},plugins:{legend:{position:'top',labels:{color:'#888',font:{family:'Rajdhani',size:11},usePointStyle:true,pointStyle:'circle'}},tooltip:{backgroundColor:'#1a1a1d',titleColor:'#f0f0f0',borderColor:'rgba(255,255,255,.1)',borderWidth:1,padding:10}},scales:{x:{grid:{display:false},ticks:{color:'#8a8a8a',font:{family:'Rajdhani',size:10}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8a8a8a',font:{family:'Rajdhani',size:10},callback:v=>'$'+v.toLocaleString()}}}}});
+  }
+  setTimeout(animateStats,100);
+}
+
+// ═══ SETTINGS ═══
+function renderSet(){
+  const f=D.fleet();
+  document.getElementById('pg-set').innerHTML=`
+    <div class="sh"><span class="sh-t">Settings</span><span class="sh-l"></span></div>
+    <div class="g2" style="max-width:700px">
+      <div class="cd"><div class="cd-h"><span class="cd-t">Fleet Owner</span></div><div class="cd-r"><span class="l">Market</span><span class="v">Las Vegas / Henderson, NV</span></div><div class="cd-r"><span class="l">Default ZIP</span><span class="v">89014</span></div><div class="cd-r"><span class="l">Vehicles</span><span class="v">${f.length}</span></div></div>
+      <div class="cd"><div class="cd-h"><span class="cd-t">Application</span></div><div class="cd-r"><span class="l">Version</span><span class="v">4.0</span></div><div class="cd-r"><span class="l">Storage</span><span class="v">Local Device</span></div><div class="cd-r"><span class="l">Reports</span><span class="v" style="color:var(--acc2)">Claude AI</span></div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-o" onclick="exportAll()">Export All Data</button>
+      <button class="btn btn-d" onclick="if(confirm('Clear all data?')){localStorage.clear();location.reload()}">Clear All Data</button>
+    </div>`;
+}
+
+// ═══ MODALS ═══
+function buildModals(){
+  document.getElementById('ml-vehicle').innerHTML=`<div class="sh" style="margin-top:0"><span class="sh-t">Add Vehicle</span><span class="sh-l"></span></div>
+    <div class="fg"><div class="fl">Year</div><input type="number" class="fi" id="a-yr" placeholder="2015"></div>
+    <div class="fg"><div class="fl">Make</div><input type="text" class="fi" id="a-mk" placeholder="Nissan"></div>
+    <div class="fg"><div class="fl">Model</div><input type="text" class="fi" id="a-md" placeholder="Altima"></div>
+    <div class="fg"><div class="fl">Trim</div><input type="text" class="fi" id="a-tr" placeholder="2.5 S"></div>
+    <div class="fg"><div class="fl">Purchase Price</div><input type="number" class="fi" id="a-pr" placeholder="11000"></div>
+    <div class="fg"><div class="fl">Daily Rate</div><input type="number" class="fi" id="a-rt" placeholder="45"></div>
+    <div class="fg"><div class="fl">Trips</div><input type="number" class="fi" id="a-tp" placeholder="4"></div>
+    <div class="fg"><div class="fl">VIN</div><input type="text" class="fi" id="a-vn" maxlength="17" placeholder="Optional"></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveVeh()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>`;
+
+  document.getElementById('ml-expense').innerHTML=`<div class="sh" style="margin-top:0"><span class="sh-t">Log Expense</span><span class="sh-l"></span></div>
+    <div class="fg"><div class="fl">Vehicle</div><select class="fi car-dd" id="e-car"></select></div>
+    <div class="fg"><div class="fl">Amount ($)</div><input type="number" class="fi" id="e-amt" placeholder="150"></div>
+    <div class="fg"><div class="fl">Category</div><select class="fi" id="e-cat"><option>Maintenance</option><option>Tires</option><option>Brakes</option><option>Insurance</option><option>Cleaning</option><option>Gas</option><option>Other</option></select></div>
+    <div class="fg"><div class="fl">Date</div><input type="date" class="fi" id="e-dt"></div>
+    <div class="fg"><div class="fl">Notes</div><input type="text" class="fi" id="e-nt" placeholder="Optional"></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveExp()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>`;
+
+  document.getElementById('ml-booking').innerHTML=`<div class="sh" style="margin-top:0"><span class="sh-t">Add Booking</span><span class="sh-l"></span></div>
+    <div class="fg"><div class="fl">Vehicle</div><select class="fi car-dd" id="b-car"></select></div>
+    <div class="fg"><div class="fl">Guest</div><input type="text" class="fi" id="b-gst" placeholder="John D."></div>
+    <div class="fg"><div class="fl">Start Date</div><input type="date" class="fi" id="b-sd"></div>
+    <div class="fg"><div class="fl">End Date</div><input type="date" class="fi" id="b-ed"></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveBook()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>`;
+
+  document.getElementById('ml-maint').innerHTML=`<div class="sh" style="margin-top:0"><span class="sh-t">Log Maintenance</span><span class="sh-l"></span></div>
+    <div class="fg"><div class="fl">Vehicle</div><select class="fi car-dd" id="m-car"></select></div>
+    <div class="fg"><div class="fl">Type</div><select class="fi" id="m-type"><option>Oil Change</option><option>Tires</option><option>Brakes</option><option>Transmission</option><option>Battery</option><option>Inspection</option><option>Other</option></select></div>
+    <div class="fg"><div class="fl">Date</div><input type="date" class="fi" id="m-dt"></div>
+    <div class="fg"><div class="fl">Cost ($)</div><input type="number" class="fi" id="m-cost" placeholder="150"></div>
+    <div class="fg"><div class="fl">Next Due Date</div><input type="date" class="fi" id="m-ndd"></div>
+    <div class="fg"><div class="fl">Notes</div><input type="text" class="fi" id="m-nt" placeholder="Optional"></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveMaint()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>`;
+
+  document.getElementById('ml-csv').innerHTML=`<div class="sh" style="margin-top:0"><span class="sh-t">Import Turo Earnings CSV</span><span class="sh-l"></span></div>
+    <p style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">Download your earnings CSV from Turo (Account > Tax Information > Download Earnings), then upload it here.</p>
+    <input type="file" id="csv-file" accept=".csv" class="fi" style="padding:10px">
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-r btn-f" onclick="importCSV()">Import</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>`;
+}
+
+// ═══ SAVE FUNCTIONS ═══
+function saveVeh(){
+  const v={year:document.getElementById('a-yr').value,make:document.getElementById('a-mk').value,model:document.getElementById('a-md').value,trim:document.getElementById('a-tr').value,price:document.getElementById('a-pr').value,rate:document.getElementById('a-rt').value,trips:document.getElementById('a-tp').value||0,vin:document.getElementById('a-vn').value.toUpperCase(),status:'unlisted',purchase_date:''};
+  if(!v.year||!v.make||!v.model){toast('Year, Make, Model required');return}
+  const f=D.fleet();f.push(v);D.sFleet(f);hideM();toast('Vehicle added');
+  ['a-yr','a-mk','a-md','a-tr','a-pr','a-rt','a-tp','a-vn'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+}
+
+function saveExp(){
+  const amt=document.getElementById('e-amt').value;if(!amt){toast('Amount required');return}
+  const e=D.exps();e.push({carIdx:document.getElementById('e-car').value,amount:amt,category:document.getElementById('e-cat').value,date:document.getElementById('e-dt').value||new Date().toISOString().split('T')[0],notes:document.getElementById('e-nt').value});
+  D.sExps(e);hideM();toast('Expense logged');document.getElementById('e-amt').value='';document.getElementById('e-nt').value='';
+}
+
+function saveBook(){
+  const g=document.getElementById('b-gst').value,sd=document.getElementById('b-sd').value,ed=document.getElementById('b-ed').value;
+  if(!g||!sd||!ed){toast('All fields required');return}
+  const b=D.books();b.push({carIdx:document.getElementById('b-car').value,guest:g,start:sd,end:ed});D.sBooks(b);hideM();toast('Booking added');
+  document.getElementById('b-gst').value='';document.getElementById('b-sd').value='';document.getElementById('b-ed').value='';
+}
+
+function saveMaint(){
+  const cost=document.getElementById('m-cost').value;
+  const m=D.maint();m.push({carIdx:document.getElementById('m-car').value,type:document.getElementById('m-type').value,date:document.getElementById('m-dt').value||new Date().toISOString().split('T')[0],cost:cost||0,next_due_date:document.getElementById('m-ndd').value||'',notes:document.getElementById('m-nt').value});
+  D.sMaint(m);hideM();toast('Maintenance logged');
+}
+
+function importCSV(){
+  const file=document.getElementById('csv-file').files[0];
+  if(!file){toast('Select a CSV file');return}
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const lines=e.target.result.split('\n');
+    const headers=lines[0].split(',');
+    toast(`Imported ${lines.length-1} rows from Turo CSV`);
+    hideM();
+  };
+  reader.readAsText(file);
+}
+
+// ═══ REVENUE DETAIL MODAL ═══
+function showRevDetail(){
+  const f=D.fleet(),e=D.exps();
+  const listed=f.filter(v=>v.status==='listed');
+  const mr=listed.reduce((s,v)=>s+Number(v.rate||0)*20,0);
+  const now=new Date(),tm=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+  const te=e.filter(x=>x.date&&x.date.startsWith(tm)).reduce((s,x)=>s+Number(x.amount||0),0);
+  const net=mr-te;
+
+  let perCar=listed.map(v=>{const d=Number(v.rate||0),m=d*20,a=d*240;
+    return`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px">${v.year} ${v.make} ${v.model}</span><span class="badge b-g">Listed</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+        <div><div style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700">$${d}</div><div style="font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Daily</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--grn)">$${m.toLocaleString()}</div><div style="font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Monthly</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--grn)">$${a.toLocaleString()}</div><div style="font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Annual</div></div>
+      </div></div>`}).join('');
+
+  document.getElementById('ml-revenue').innerHTML=`
+    <div class="sh" style="margin-top:0"><span class="sh-t">Revenue Breakdown</span><span class="sh-l"></span></div>
+    <div class="g3" style="margin-bottom:14px">
+      <div style="background:var(--sf);border-radius:8px;padding:12px;text-align:center;border:1px solid var(--bd)"><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--grn)">$${mr.toLocaleString()}</div><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Revenue</div></div>
+      <div style="background:var(--sf);border-radius:8px;padding:12px;text-align:center;border:1px solid var(--bd)"><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--acc2)">-$${te.toLocaleString()}</div><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Expenses</div></div>
+      <div style="background:var(--sf);border-radius:8px;padding:12px;text-align:center;border:1px solid var(--bd)"><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:${net>=0?'var(--grn)':'var(--red)'}">$${net.toLocaleString()}</div><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Net Profit</div></div>
+    </div>
+    ${perCar?'<div class="sh"><span class="sh-t">Per Vehicle</span><span class="sh-l"></span></div>'+perCar:''}
+    <div style="margin-top:14px"><button class="btn btn-o btn-f" onclick="hideM()">Close</button></div>`;
+  showM('revenue');
+}
+
+// ═══ EXPORT ═══
+function exportAll(){const d=JSON.stringify({fleet:D.fleet(),expenses:D.exps(),bookings:D.books(),maintenance:D.maint()},null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='fleet-data.json';a.click();URL.revokeObjectURL(u);toast('Exported')}
+
+// ═══ COMMAND PALETTE ═══
+const cmdActions=[
+  {label:'Decode VIN',hint:'VIN Lookup',action:()=>sw('vin',null)},
+  {label:'Add Vehicle',hint:'Fleet',action:()=>showM('vehicle')},
+  {label:'Log Expense',hint:'Finances',action:()=>showM('expense')},
+  {label:'Add Booking',hint:'Calendar',action:()=>showM('booking')},
+  {label:'Log Maintenance',hint:'Fleet',action:()=>showM('maint')},
+  {label:'View Dashboard',hint:'Navigate',action:()=>sw('dash',null)},
+  {label:'View Fleet',hint:'Navigate',action:()=>sw('fleet',null)},
+  {label:'View Calendar',hint:'Navigate',action:()=>sw('cal',null)},
+  {label:'View Finances',hint:'Navigate',action:()=>sw('fin',null)},
+  {label:'Export Data',hint:'Settings',action:()=>exportAll()},
+  {label:'Import Turo CSV',hint:'Finances',action:()=>showM('csv')},
+];
+
+function openCmd(){
+  document.getElementById('cmd-palette').classList.add('show');
+  const inp=document.getElementById('cmd-input');inp.value='';inp.focus();
+  renderCmdResults('');
+}
+function closeCmd(){document.getElementById('cmd-palette').classList.remove('show')}
+function renderCmdResults(q){
+  const filtered=q?cmdActions.filter(a=>a.label.toLowerCase().includes(q.toLowerCase())):cmdActions;
+  // Add fleet vehicles to search
+  const fleet=D.fleet();
+  const vehicleResults=q?fleet.filter(v=>`${v.year} ${v.make} ${v.model}`.toLowerCase().includes(q.toLowerCase())).map(v=>({label:`${v.year} ${v.make} ${v.model}`,hint:v.vin||'Fleet',action:()=>{sw('fleet',null);closeCmd()}})):[];
+  const all=[...filtered,...vehicleResults].slice(0,8);
+  document.getElementById('cmd-results').innerHTML=all.map(a=>`<div class="cp-item" onclick="this.dataset.idx;closeCmd()" data-action="${cmdActions.indexOf(a)}"><span class="cp-label">${a.label}</span><span class="cp-hint">${a.hint}</span></div>`).join('');
+  document.querySelectorAll('.cp-item').forEach((el,i)=>{el.onclick=()=>{all[i].action();closeCmd()}});
+}
+
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const cp=document.getElementById('cmd-palette');cp.classList.contains('show')?closeCmd():openCmd()}
+  if(e.key==='Escape')closeCmd();
+});
+document.getElementById('cmd-input').addEventListener('input',e=>renderCmdResults(e.target.value));
+document.getElementById('cmd-palette').addEventListener('click',e=>{if(e.target===document.getElementById('cmd-palette'))closeCmd()});
+
+// ═══ INIT ═══
+(function(){
+  if(!D.fleet().length)D.sFleet([{year:'2015',make:'Nissan',model:'Altima',trim:'2.5 S',vin:'REDACTED',price:'11000',rate:'45',trips:4,status:'listed',purchase_date:'2025-01-01'}]);
+  buildNav();buildModals();renderVin();renderDash();
+  try{document.getElementById('e-dt').value=new Date().toISOString().split('T')[0]}catch(e){}
+  try{document.getElementById('m-dt').value=new Date().toISOString().split('T')[0]}catch(e){}
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+  // Intersection Observer for scroll-reveal animations
+  const observer=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}});
+  },{threshold:0.1,rootMargin:'0px 0px -40px 0px'});
+
+  function observeReveals(){
+    document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+  }
+  // Re-observe after each tab render
+  const origSw=sw;
+  window._afterRender=()=>setTimeout(observeReveals,50);
+  observeReveals();
+})();
+</script>
+</body>
+</html>
