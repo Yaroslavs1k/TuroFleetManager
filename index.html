@@ -870,7 +870,7 @@ function renderDash(){
 // ── VIN LOOKUP ──
 let cv=null;
 function renderVin(){
-  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup &amp; Entrance Strategy</span><span class="sh-l"></span></div><div class="g2" style="max-width:800px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7"><strong style="color:var(--acc2)">Entrance Strategy</strong> — Decodes VIN, checks recalls, estimates KBB value, calculates Turo ROI, and generates depreciation curve. For full 16-section analysis, use the Full Claude Report button.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px">Enter a VIN to see vehicle details, pricing, and fleet analysis.</div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; checking recalls...</div></div>';
+  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:800px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7">Enter a VIN to decode vehicle details, check open recalls, see a Turo ROI estimate, and get research links. Use the <strong style="color:var(--acc2)">Full Claude Report</strong> button for a complete 16-section fleet analysis including KBB value, depreciation curve, and exit strategy.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px">Enter a VIN to see vehicle details, pricing, and fleet analysis.</div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; checking recalls...</div></div>';
 }
 
 async function lookupVIN(){
@@ -1326,42 +1326,202 @@ function sendNotif(){const title=document.getElementById('nt-title')?.value.trim
 // ── SETTINGS ──
 function renderSet(){
   const u=CU||{};
-  const supaSection=SA||isDev(u.email)?'<div class="sh"><span class="sh-t">Developer Settings</span><span class="sh-l"></span></div><div class="cd"><div style="margin-bottom:10px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'">'+(CONFIGURED?'Supabase Connected':'localStorage Mode')+'</span></div>'+(CONFIGURED?'<p style="font-size:12px;color:var(--grn)">Connected to Supabase cloud.</p><div class="cd-r"><span class="l">Project URL</span><span class="v" style="font-family:monospace;font-size:10px">yeohfqzdgvhwyjmezdii.supabase.co</span></div>':'<div style="font-size:11px;color:var(--tx2);line-height:1.7">Running in demo mode. Cloud sync requires Supabase credentials in code.</div>')+'</div>':'';
+  const supaSection=SA||isDev(u.email)?'<div class="sh"><span class="sh-t">Developer Settings</span><span class="sh-l"></span></div><div class="cd"><div style="margin-bottom:10px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'">'+(CONFIGURED?'Supabase Connected':'localStorage Mode')+'</span></div>'+(CONFIGURED?'<p style="font-size:12px;color:var(--grn);margin-bottom:8px">Connected to Supabase cloud.</p><div class="cd-r"><span class="l">Project URL</span><span class="v" style="font-family:monospace;font-size:10px">yeohfqzdgvhwyjmezdii.supabase.co</span></div>':'<div style="font-size:11px;color:var(--tx2);line-height:1.7">Running in demo mode.</div>')+'</div>':'';
 
   document.getElementById('pg-set').innerHTML=
     '<div class="sh"><span class="sh-t">Settings</span><span class="sh-l"></span></div>'
     +'<div class="g2">'
+
+    // LEFT COLUMN
     +'<div>'
-    +'<div class="sh" style="margin-top:0"><span class="sh-t">Your Profile</span><span class="sh-l"></span></div>'
+
+    // ACCOUNT SECTION
+    +'<div class="sh" style="margin-top:0"><span class="sh-t">Account</span><span class="sh-l"></span></div>'
     +'<div class="cd">'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
-    +'<div style="width:48px;height:48px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(u.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:\'Rajdhani\',sans-serif;font-weight:700;color:#161616;font-size:20px">'+(u.name||u.email||'?')[0].toUpperCase()+'</div>'
-    +'<div><div style="font-size:15px;font-weight:600">'+(u.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(u.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'
-    +(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+CT.name+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace;font-size:12px">'+CT.code+'</span></div>':'<div class="cd-r"><span class="l">Team</span><span class="v" style="color:var(--tx3)">None</span></div>')
-    +(isOwner()&&CT?'<button class="btn btn-d btn-f btn-s" style="margin-top:10px" onclick="showEditTeam()">&#9998; Edit Team Name</button>':'')
-    +'<div style="margin-top:12px"><button class="btn btn-red btn-f" onclick="doLogout()">Sign Out</button></div>'
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
+    +'<div style="width:52px;height:52px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(u.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;color:#161616;font-size:22px;flex-shrink:0">'+(u.name||u.email||'?')[0].toUpperCase()+'</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;margin-bottom:2px">'+(u.name||'--')+'</div><div style="font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis">'+(u.email||'--')+'</div><div style="margin-top:5px">'+rb(SA?'superadmin':teamRole())+'</div></div>'
     +'</div>'
+    +'<button class="btn btn-d btn-f" style="margin-bottom:8px" onclick="showEditProfile()">&#9998; Edit Name &amp; Email</button>'
+    +'<button class="btn btn-o btn-f" onclick="showChangePassword()">&#128274; Change Password</button>'
+    +'</div>'
+
+    // TEAM SECTION
+    +'<div class="sh"><span class="sh-t">Team</span><span class="sh-l"></span></div>'
+    +'<div class="cd">'
+    +(CT?
+      '<div class="cd-r"><span class="l">Team Name</span><span class="v">'+CT.name+'</span></div>'
+      +'<div class="cd-r"><span class="l">Team Code</span><span class="v" style="display:flex;align-items:center;gap:8px"><span style="font-family:monospace;font-size:12px">'+CT.code+'</span><button onclick="navigator.clipboard.writeText(''+CT.code+'');toast('Team code copied!')" style="background:var(--rg2);border:1px solid rgba(181,136,99,.2);color:var(--acc2);padding:2px 8px;border-radius:5px;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;cursor:pointer;letter-spacing:1px">COPY</button></span></div>'
+      +(isOwner()?'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-d btn-f btn-s" onclick="showEditTeam()">&#9998; Edit Team Name</button><button class="btn btn-o btn-f btn-s" onclick="showInviteModal()">&#128279; Share Invite</button></div>':'')
+    :'<div style="font-size:12px;color:var(--tx3);padding:8px 0">No team selected.</div>')
+    +'<div style="margin-top:8px"><button class="btn btn-o btn-f btn-s" onclick="showNewTeam()">+ Create New Team</button></div>'
+    +'</div>'
+
+    // NOTIFICATIONS
+    +'<div class="sh"><span class="sh-t">Notifications</span><span class="sh-l"></span></div>'
+    +'<div class="cd" id="notif-prefs">'
+    +renderNotifToggles()
+    +'</div>'
+
     +supaSection
     +'</div>'
+
+    // RIGHT COLUMN
     +'<div>'
+
+    // APP INFO
     +'<div class="sh" style="margin-top:0"><span class="sh-t">Application</span><span class="sh-l"></span></div>'
     +'<div class="cd">'
     +'<div class="cd-r"><span class="l">Version</span><span class="v">6.0</span></div>'
     +'<div class="cd-r"><span class="l">Storage</span><span class="v">'+(CONFIGURED?'Supabase Cloud':'Local Device')+'</span></div>'
     +'<div class="cd-r"><span class="l">Your Teams</span><span class="v">'+(SA?D.teams().length:getMyTeams().length)+'</span></div>'
     +'<div class="cd-r"><span class="l">Vehicles</span><span class="v">'+D.fleet().length+'</span></div>'
-    +'<div class="cd-r"><span class="l">Total Trips Logged</span><span class="v">'+D.books().length+'</span></div>'
+    +'<div class="cd-r"><span class="l">Trips Logged</span><span class="v">'+D.books().length+'</span></div>'
+    +'<div class="cd-r"><span class="l">Expenses Logged</span><span class="v">'+D.exps().length+'</span></div>'
     +'</div>'
+
+    // DATA MANAGEMENT
     +'<div class="sh"><span class="sh-t">Data Management</span><span class="sh-l"></span></div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<button class="btn btn-o" onclick="exportAll()">&#128229; Export JSON</button>'
-    +'<button class="btn btn-o" onclick="showM(\'csv\')">&#128196; Import Turo CSV</button>'
-    +(isOwner()?'<button class="btn btn-red" onclick="if(confirm(\'Clear ALL data? This cannot be undone.\')){{localStorage.clear();location.reload();}}">Clear All Data</button>':'')
+    +'<button class="btn btn-o" onclick="showM('csv')">&#128196; Import Turo CSV</button>'
     +'</div>'
-    +'<div class="sh" style="margin-top:14px"><span class="sh-t">About</span><span class="sh-l"></span></div>'
-    +'<div class="cd"><div style="font-size:12px;color:var(--tx2);line-height:1.8">Fleet Manager v6.0<br>Built for Las Vegas Turo hosts.<br>Dashboard &bull; VIN Analysis &bull; Fleet Tracking &bull; Calendar &bull; Finances &bull; Team Management<br><br><span style="font-size:10px;color:var(--tx3)">SA Trigger: Ctrl+Shift+Alt+F (desktop) &bull; 7 taps logo (mobile)</span></div></div>'
+
+    // ABOUT
+    +'<div class="sh"><span class="sh-t">About</span><span class="sh-l"></span></div>'
+    +'<div class="cd" style="margin-bottom:14px"><div style="font-size:12px;color:var(--tx2);line-height:1.9">Fleet Manager v6.0<br>Built for Las Vegas Turo hosts.<br>Dashboard &bull; VIN Lookup &bull; Fleet &bull; Calendar &bull; Finances &bull; Team Management<br><br><span style="font-size:10px;color:var(--tx3)">SA: Ctrl+Shift+Alt+F (desktop) &bull; 7 taps logo (mobile)</span></div></div>'
+
+    // DANGER ZONE
+    +'<div class="sh"><span class="sh-t" style="color:var(--red)">Danger Zone</span><span class="sh-l"></span></div>'
+    +'<div class="cd"><div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button class="btn btn-red btn-f" onclick="doLogout()">&#128682; Sign Out</button>'
+    +(isOwner()?'<button class="btn btn-red btn-f" onclick="if(confirm('Clear ALL local data? This cannot be undone.')){localStorage.clear();location.reload();}">&#9888; Clear All Data</button>':'')
+    +'</div></div>'
+
     +'</div></div>';
 }
+
+function renderNotifToggles(){
+  const prefs=D.get('notif_prefs',{detail:true,maint:true,insurance:true,registration:true,surge:true});
+  const items=[
+    {k:'detail',label:'Detailing reminders',icon:'&#128663;'},
+    {k:'maint',label:'Maintenance due alerts',icon:'&#128295;'},
+    {k:'insurance',label:'Insurance renewal alerts',icon:'&#128737;'},
+    {k:'registration',label:'Registration due alerts',icon:'&#128203;'},
+    {k:'surge',label:'Surge event reminders',icon:'&#9889;'},
+  ];
+  return items.map(item=>{
+    const on=prefs[item.k]!==false;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)">'
+      +'<span style="font-size:12px">'+item.icon+' '+item.label+'</span>'
+      +'<div onclick="toggleNotifPref(''+item.k+'')" style="width:36px;height:20px;border-radius:10px;background:'+(on?'var(--grn)':'var(--cd2)')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">'
+      +'<div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;'+(on?'right:2px':'left:2px')+';transition:all .2s"></div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function toggleNotifPref(key){
+  const prefs=D.get('notif_prefs',{detail:true,maint:true,insurance:true,registration:true,surge:true});
+  prefs[key]=!prefs[key];
+  D.set('notif_prefs',prefs);
+  const el=document.getElementById('notif-prefs');
+  if(el)el.innerHTML=renderNotifToggles();
+  toast((prefs[key]?'Enabled':'Disabled')+' notifications');
+}
+
+function showEditProfile(){
+  document.getElementById('ml-profile').innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Edit Profile</span><span class="sh-l"></span></div>'
+    +'<div class="fg"><label class="fl">Display Name</label><input type="text" class="fi" id="ep-name" value="'+(CU?.name||'')+'" placeholder="Your name"></div>'
+    +'<div class="fg"><label class="fl">Email</label><input type="email" class="fi" id="ep-email" value="'+(CU?.email||'')+'" placeholder="you@example.com"></div>'
+    +'<div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:9px;font-size:11px;color:var(--tx3);margin-bottom:12px;line-height:1.6">&#9432; Name changes apply immediately. Email changes require re-login.</div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveProfile()">Save Changes</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  showM('profile');
+}
+
+async function saveProfile(){
+  const name=document.getElementById('ep-name')?.value.trim();
+  const email=document.getElementById('ep-email')?.value.trim().toLowerCase();
+  if(!name){toast('Name required');return;}
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Valid email required');return;}
+  const nameChanged=name!==CU.name;
+  const emailChanged=email!==CU.email;
+  CU.name=name;
+  if(!emailChanged){
+    localStorage.setItem('cu',JSON.stringify(CU));
+    if(CONFIGURED&&sb){try{await sb.from('profiles').update({name}).eq('id',CU.id);}catch(e){}}
+    // Update team owner name
+    if(CT&&CT.ownerId===CU.id){const teams=D.teams();const t=teams.find(x=>x.id===CT.id);if(t){t.ownerName=name;D.sTeams(teams);CT=t;}}
+    hideM();
+    const av=document.getElementById('nav-av'),nn=document.getElementById('nav-name');
+    if(av)av.textContent=name[0].toUpperCase();
+    if(nn)nn.textContent=name;
+    renderSet();
+    toast('Profile updated!');
+  } else {
+    CU.email=email;
+    localStorage.setItem('cu',JSON.stringify(CU));
+    if(CONFIGURED&&sb){
+      try{
+        await sb.auth.updateUser({email,data:{name}});
+        await sb.from('profiles').update({name,email}).eq('id',CU.id);
+        toast('Verification email sent to '+email+' — check your inbox!');
+      }catch(e){toast('Error: '+e.message);return;}
+    } else {
+      const users=D.users().map(u=>u.id===CU.id?{...u,name,email}:u);D.sUsers(users);
+      toast('Profile updated!');
+    }
+    hideM();renderSet();
+  }
+}
+
+function showChangePassword(){
+  document.getElementById('ml-profile').innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Change Password</span><span class="sh-l"></span></div>'
+    +'<div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters" autocomplete="new-password"></div>'
+    +'<div class="fg"><label class="fl">Confirm Password</label><input type="password" class="fi" id="cp-confirm" placeholder="Repeat password" autocomplete="new-password"></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="savePassword()">Update Password</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  showM('profile');
+}
+
+async function savePassword(){
+  const np=document.getElementById('cp-new')?.value;
+  const cp=document.getElementById('cp-confirm')?.value;
+  if(!np||np.length<6){toast('Password must be at least 6 characters');return;}
+  if(np!==cp){toast('Passwords do not match');return;}
+  if(CONFIGURED&&sb){
+    try{
+      await sb.auth.updateUser({password:np});
+      hideM();toast('Password updated!');
+    }catch(e){toast('Error: '+e.message);}
+  } else {
+    const h=await h256(np+CU.salt);
+    const users=D.users().map(u=>u.id===CU.id?{...u,ph:h}:u);D.sUsers(users);
+    hideM();toast('Password updated!');
+  }
+}
+
+function showInviteModal(){
+  if(!CT)return;
+  document.getElementById('ml-profile').innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Invite to Team</span><span class="sh-l"></span></div>'
+    +'<div style="text-align:center;padding:16px 0">'
+    +'<div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--acc2);letter-spacing:4px;margin-bottom:8px">'+CT.code+'</div>'
+    +'<div style="font-size:11px;color:var(--tx3);margin-bottom:16px">Share this code with your team</div>'
+    +'<button class="btn btn-r" onclick="navigator.clipboard.writeText(''+CT.code+'');toast('Code copied!')">&#128203; Copy Code</button>'
+    +'</div>'
+    +'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:11px;color:var(--tx2);line-height:1.7">'
+    +'<strong style="color:var(--acc2)">Instructions for your team:</strong><br>'
+    +'1. Go to: <strong>yaroslavs1k.github.io/TuroFleetManager</strong><br>'
+    +'2. Create an account<br>'
+    +'3. Enter team code: <strong>'+CT.code+'</strong><br>'
+    +'4. You approve them in Admin → Pending'
+    +'</div>'
+    +'<div style="margin-top:12px"><button class="btn btn-o btn-f" onclick="hideM()">Close</button></div>';
+  showM('profile');
+}
+
 </script>
 <script>
 // ── BUILD MODALS ──
