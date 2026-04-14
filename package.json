@@ -1,0 +1,44 @@
+{
+    "name": "turo-fleet-manager",
+    "version": "4.0.0",
+    "description": "Turo Fleet Manager — Las Vegas Fleet Dashboard",
+    "main": "main.js",
+    "author": "Turo Fleet Manager",
+    "license": "MIT",
+    "scripts": {
+          "start": "electron .",
+          "build": "electron-builder --win --publish never"
+    },
+    "devDependencies": {
+          "electron": "^28.0.0",
+          "electron-builder": "^24.0.0"
+    },
+    "build": {
+          "appId": "com.turofleet.manager",
+          "productName": "Turo Fleet Manager",
+          "directories": {
+                  "output": "dist"
+          },
+          "files": [
+                  "main.js",
+                  "index.html",
+                  "manifest.json",
+                  "sw.js"
+          ],
+          "win": {
+                  "target": [
+                            {
+                                        "target": "nsis",
+                                        "arch": ["x64"]
+                            }
+                  ]
+          },
+          "nsis": {
+                  "oneClick": false,
+                  "allowToChangeInstallationDirectory": true,
+                  "createDesktopShortcut": true,
+                  "createStartMenuShortcut": true,
+                  "shortcutName": "Turo Fleet Manager"
+          }
+    }
+}
