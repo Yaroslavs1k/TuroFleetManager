@@ -1821,11 +1821,37 @@ function sAt(tab,el){
     +'<div class="cd-r"><span class="l">All Teams</span><span class="v">'+D.teams().length+'</span></div>'
     +'<div class="cd-r"><span class="l">All Users</span><span class="v">'+D.users().length+'</span></div>'
     +'<div class="cd-r"><span class="l">Total Vehicles</span><span class="v">'+D.teams().reduce((s,t)=>{try{return s+(JSON.parse(localStorage.getItem('T'+t.id+'_fleet'))||[]).length;}catch{return s;}},0)+'</span></div>'
+    +'<div class="sh"><span class="sh-t">Supabase Health</span><span class="sh-l"></span></div>'
+    +'<div id="supa-diag" style="margin-bottom:10px"><button class="btn btn-o btn-s" onclick="runSupaDiag()">&#128268; Run Table Check</button></div>'
     +'<div class="sh"><span class="sh-t">All Teams</span><span class="sh-l"></span></div>'
     +'<div class="lc">'+D.teams().map(t=>'<div class="u-row"><div><div style="font-weight:600;font-size:13px">'+t.name+'</div><div style="font-size:11px;color:var(--tx3)">'+t.code+' &middot; Owner: '+t.ownerName+' &middot; Members: '+(t.members&&t.members.length||0)+'</div></div><button class="btn btn-sa btn-s" onclick="switchTeam(\''+t.id+'\')">View</button></div>').join('')+'</div>'
     +(SA?'<div style="margin-top:14px"><button class="btn btn-red" onclick="doLogout()">Exit Super Admin</button></div>':'')
     +'</div>';
   }
+}
+
+async function runSupaDiag(){
+  const el=document.getElementById('supa-diag');
+  if(!el)return;
+  if(!CONFIGURED||!sb){el.innerHTML='<div style="font-size:12px;color:var(--amb);padding:8px 0">&#9888; Supabase not configured — running in localStorage mode.</div>';return;}
+  const tables=['vehicles','expenses','bookings','maintenance','detailing','fuels','washes','incidents','guests','teams','team_members','profiles','notifications'];
+  el.innerHTML='<div style="font-size:11px;color:var(--tx3);margin-bottom:8px">Checking '+tables.length+' tables... <span class="spin" style="width:10px;height:10px;border-width:1px"></span></div>';
+  const results=await Promise.all(tables.map(async t=>{
+    try{
+      const{error}=await sb.from(t).select('id',{count:'exact',head:true});
+      return{t,ok:!error,err:error?.message||null};
+    }catch(e){return{t,ok:false,err:e.message};}
+  }));
+  const pass=results.filter(r=>r.ok).length;
+  const fail=results.filter(r=>!r.ok).length;
+  el.innerHTML=
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+    +'<span style="font-size:12px;color:'+(fail===0?'var(--grn)':'var(--amb)')+'">'+pass+'/'+tables.length+' tables reachable</span>'
+    +'<button class="btn btn-o btn-s" onclick="runSupaDiag()">Re-check</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">'
+    +results.map(r=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;background:'+(r.ok?'rgba(109,186,125,.07)':'rgba(196,122,106,.07)')+';border:1px solid '+(r.ok?'rgba(109,186,125,.2)':'rgba(196,122,106,.2)')+'"><span style="font-size:13px">'+(r.ok?'✅':'❌')+'</span><div><div style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:600;color:'+(r.ok?'var(--grn)':'var(--red)')+'">'+r.t+'</div>'+(r.err?'<div style="font-size:9px;color:var(--tx3)">'+r.err.substring(0,40)+'</div>':'')+'</div></div>').join('')
+    +'</div>';
 }
 
 function chgRole(uid,role){if(!CT)return;const teams=D.teams();const t=teams.find(x=>x.id===CT.id);if(!t||!t.members)return;const idx=t.members.findIndex(m=>m.uid===uid);if(idx>=0)t.members[idx].role=role;D.sTeams(teams);CT=t;logAct('Role Changed','User to '+role);toast('Role updated');renderAdmin();}
