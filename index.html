@@ -259,7 +259,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
 </style>
 </head>
-<body>\n
+<body>
 <div id="sa-banner">&#9889; SUPER ADMIN MODE &#8212; Full Platform Access Active</div>
 
 <div id="auth-screen">
@@ -395,7 +395,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="mo" id="m-editteam"><div class="ml" id="ml-editteam"></div></div>
 <div class="mo" id="m-editveh"><div class="ml" id="ml-editveh"></div></div>
 <div class="toast" id="toast"></div>
-</div>\n
+</div>
 <script>
 // ═══════════════════════════════════════════════
 // FLEET MANAGER v6.0
@@ -696,7 +696,7 @@ function rb(role){
   if(isDev(CU?.email)&&role==='owner')return'<span class="rb rb-dev">&#128736; Developer</span>';
   return'<span class="'+(m[role]||'rb rb-readonly')+'">'+(labels[role]||role||'no role')+'</span>';
 }
-</script>\n
+</script>
 <script>
 // LAUNCH
 function launch(){
@@ -865,7 +865,7 @@ function renderDash(){
 
   setTimeout(()=>{animStats();if(window._ar)window._ar();},50);
 }
-</script>\n
+</script>
 <script>
 // ── VIN LOOKUP ──
 let cv=null;
@@ -1173,7 +1173,7 @@ function blacklistGuest(ci,name){
   else g.push({ci,name,blacklisted:true,reason:'Blocked by owner',date:today()});
   D.sGuests(g);logAct('Guest Blacklisted',name);toast(name+' blocked');showVD(ci);
 }
-</script>\n
+</script>
 <script>
 // ── CALENDAR ──
 let calD=new Date();
@@ -1362,7 +1362,7 @@ function renderSet(){
     +'<div class="cd"><div style="font-size:12px;color:var(--tx2);line-height:1.8">Fleet Manager v6.0<br>Built for Las Vegas Turo hosts.<br>Dashboard &bull; VIN Analysis &bull; Fleet Tracking &bull; Calendar &bull; Finances &bull; Team Management<br><br><span style="font-size:10px;color:var(--tx3)">SA Trigger: Ctrl+Shift+Alt+F (desktop) &bull; 7 taps logo (mobile)</span></div></div>'
     +'</div></div>';
 }
-</script>\n
+</script>
 <script>
 // ── BUILD MODALS ──
 function buildModals(){
