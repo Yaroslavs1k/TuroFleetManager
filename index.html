@@ -1686,6 +1686,39 @@ async function lookupVIN(){
 
     let H='';
 
+    // ── QUICK BUY DECISION ──
+    const qVerdict=askPrice<=tgt&&riskScore<7&&profitMonth>0?'BUY':askPrice>wk||( riskScore>=8&&profitMonth<=0)?'PASS':'CAUTION';
+    const qColor=qVerdict==='BUY'?'var(--grn)':qVerdict==='PASS'?'var(--red)':'var(--amb)';
+    const qBg=qVerdict==='BUY'?'rgba(109,186,125,.08)':qVerdict==='PASS'?'rgba(196,122,106,.08)':'rgba(224,159,62,.08)';
+    const qBorder=qVerdict==='BUY'?'rgba(109,186,125,.3)':qVerdict==='PASS'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
+    const qIcon=qVerdict==='BUY'?'✅':qVerdict==='PASS'?'❌':'⚠️';
+    const qReasons=[];
+    if(askPrice>mx)qReasons.push('Asking price exceeds maximum ('+fmt$(mx)+')');
+    else if(askPrice<=tgt)qReasons.push('Asking price is at or below target ('+fmt$(tgt)+')');
+    else qReasons.push('Asking price is between target and maximum');
+    if(riskScore>=7)qReasons.push('High damage risk score ('+riskScore+'/10)');
+    else qReasons.push('Damage risk acceptable ('+riskScore+'/10)');
+    if(profitMonth>0)qReasons.push('Est. monthly profit: '+fmt$(profitMonth));
+    else qReasons.push('Estimated monthly loss: '+fmt$(profitMonth));
+    if(monthsBE<999)qReasons.push('Break-even in ~'+monthsBE+' months');
+    H+='<div style="margin-bottom:20px;background:'+qBg+';border:2px solid '+qBorder+';border-radius:10px;padding:16px">'
+      +'<div style="display:flex;align-items:center;gap:14px">'
+      +'<div style="font-size:42px;flex-shrink:0;line-height:1">'+qIcon+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tx3);text-transform:uppercase;margin-bottom:2px">Quick Buy Decision</div>'
+      +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:28px;font-weight:700;color:'+qColor+';line-height:1;margin-bottom:6px">'+qVerdict+'</div>'
+      +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">'
+      +'<span>Target: <strong style="color:var(--grn)">'+fmt$(tgt)+'</strong></span>'
+      +'<span>Max: <strong style="color:var(--amb)">'+fmt$(mx)+'</strong></span>'
+      +'<span>Est. Profit: <strong style="color:'+(profitMonth>0?'var(--grn)':'var(--red)')+'">'+fmt$(profitMonth)+'/mo</strong></span>'
+      +'<span>Risk: <strong style="color:'+qColor+'">'+riskScore+'/10</strong></span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--tx2)">'+qReasons.map(r=>'<span style="margin-right:10px">• '+r+'</span>').join('')+'</div>'
+      +'</div>'
+      +'</div>'
+      +(canEdit()?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid '+qBorder+'"><button class="btn btn-r" onclick="addFromVIN()">+ Add to Fleet</button></div>':'')
+      +'</div>';
+
     // ── 01 NEGOTIATION CARD ──
     H+='<div style="margin-bottom:20px">'+SH('01','Negotiation Card');
     H+='<div class="ph" style="text-align:left"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div class="ph-e">Fleet Purchase Analysis &bull; Las Vegas Turo</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:19px;font-weight:700;color:var(--tx);margin:3px 0">'+vName+'</div><div style="font-size:11px;color:var(--tx3)">'+Number(miles||0).toLocaleString()+' mi &bull; ZIP '+zip+' &bull; '+segLabel+'</div></div><div style="text-align:right;padding-left:12px"><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Damage Risk</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:32px;font-weight:700;color:'+riskColor+';line-height:1">'+riskScore+'<span style="font-size:13px">/10</span></div><div style="font-size:9px;font-weight:700;color:'+riskColor+'">'+riskLabel+'</div></div></div>';
@@ -1877,10 +1910,21 @@ async function lookupVIN(){
 
 function addFromVIN(){
   if(!cv||!canEdit())return;
-  const f=D.fleet();
   const ppVal=document.getElementById('pp-i')?.value.trim()||'';
-  f.push({year:cv.year,make:cv.make,model:cv.model,trim:cv.trim,vin:cv.vin,price:ppVal,rate:'',trips:0,status:'unlisted',mileage:cv.miles||'',purchase_date:''});
-  D.sFleet(f);logAct('Vehicle Added from VIN',cv.year+' '+cv.make+' '+cv.model);toast(ppVal?'Added to fleet with purchase price $'+Number(ppVal).toLocaleString():'Added to fleet — fill in purchase price &amp; rate');
+  // Pre-fill the Add Vehicle modal and open it for review before saving
+  const ml=document.getElementById('ml-vehicle');
+  if(ml){
+    // Fill fields
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+    showM('vehicle');
+    setTimeout(()=>{
+      set('a-yr',cv.year);set('a-mk',cv.make);set('a-md',cv.model);set('a-tr',cv.trim||'');
+      set('a-pr',ppVal);set('a-mi',cv.miles||'');set('a-vn',cv.vin||'');
+      // Focus the rate field so user fills the one missing piece
+      const rateEl=document.getElementById('a-rt');if(rateEl){rateEl.focus();rateEl.scrollIntoView({block:'center',behavior:'smooth'});}
+      toast('Fields pre-filled from VIN — enter your daily rate and save');
+    },80);
+  }
 }
 
 // ── FLEET ──
