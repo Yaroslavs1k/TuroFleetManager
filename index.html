@@ -2268,7 +2268,7 @@ function showWorkModal(){
 function saveWork(){
   const dt=document.getElementById('wl-dt').value;
   const type=document.getElementById('wl-type').value;
-  const ci=parseInt(document.getElementById('wl-car').value)||−1;
+  const ci=parseInt(document.getElementById('wl-car').value)||-1;
   const hrs=parseFloat(document.getElementById('wl-hrs').value)||0;
   const jobs=parseInt(document.getElementById('wl-jobs').value)||0;
   const notes=document.getElementById('wl-notes').value.trim();
