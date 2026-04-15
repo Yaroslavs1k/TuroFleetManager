@@ -1379,50 +1379,81 @@ function renderDash(){
       +'<div class="reveal" style="margin-bottom:14px">'+naItems.map(it=>'<div class="na-item na-'+it.sev+'" onclick="sw(\'fleet\',null)"><span class="na-icon" style="color:'+(it.sev==='red'?'var(--red)':'var(--amb)')+'">'+it.icon+'</span><div><div class="na-title">'+it.title+'</div><div class="na-sub">'+it.sub+'</div></div></div>').join('')+'</div>'
     :'';
 
-  // Break-even for first vehicle
+  // Break-even — fleet-wide (all vehicles combined)
   let beH='';
   if(f.length>0){
-    const v=f[0];const pp=Number(v.price||0);
-    const totalEarned=b.filter(x=>x.ci==0).reduce((s,x)=>s+Number(x.amount||0),0);
-    const totalExpenses=e.filter(x=>x.ci==0).reduce((s,x)=>s+Number(x.amount||0),0);
+    const beVehicleId=D.get('dashBeVeh','all');
+    const beVehicles=beVehicleId==='all'?f:[f[parseInt(beVehicleId)]].filter(Boolean);
+    const totalPP=beVehicles.reduce((s,v,i)=>s+Number(v.price||0),0);
+    const idxs=beVehicleId==='all'?f.map((_,i)=>i):[parseInt(beVehicleId)].filter(i=>!isNaN(i));
+    const totalEarned=b.filter(x=>idxs.includes(Number(x.ci))).reduce((s,x)=>s+Number(x.amount||0),0);
+    const totalExpenses=e.filter(x=>idxs.includes(Number(x.ci))).reduce((s,x)=>s+Number(x.amount||0),0);
     const netEarned=totalEarned-totalExpenses;
-    const pct=pp>0?Math.min(100,Math.round((netEarned/pp)*100)):0;
+    const pct=totalPP>0?Math.min(100,Math.round((netEarned/totalPP)*100)):0;
     const color=pct>=75?'grn':pct>=40?'amb':'red';
-    beH='<div class="sh reveal"><span class="sh-t">Break-Even Progress</span><span class="sh-l"></span><span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;color:var(--acc2);margin-left:10px">'+v.year+' '+v.make+' '+v.model+'</span></div><div class="cd reveal"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--tx2)">Net Earned vs Purchase Price</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:13px">'+pct+'%</span></div><div class="be-bar"><div class="be-fill '+color+'" style="width:'+pct+'%"></div></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3)"><span>Net Earned: <strong style="color:var(--tx)">'+fmt$(netEarned)+'</strong></span><span>Goal: <strong style="color:var(--tx)">'+fmt$(pp)+'</strong></span></div></div>';
+    const selLabel=beVehicleId==='all'?'All Vehicles ('+f.length+')':((v=>v?v.year+' '+v.make+' '+v.model:'Vehicle')(f[parseInt(beVehicleId)]));
+    const selDrop=f.length>1?'<select onchange="D.set(\'dashBeVeh\',this.value);renderDash()" style="font-family:\'Plus Jakarta Sans\',sans-serif;font-size:11px;background:var(--bg2);border:1px solid rgba(181,136,99,.25);border-radius:5px;color:var(--tx2);padding:2px 6px;cursor:pointer"><option value="all"'+(beVehicleId==='all'?' selected':'')+'>All Vehicles</option>'+f.map((v,i)=>'<option value="'+i+'"'+(beVehicleId==i?' selected':'')+'>'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+'</option>').join('')+'</select>':'<span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;color:var(--acc2)">'+selLabel+'</span>';
+    beH='<div class="sh reveal"><span class="sh-t">Break-Even Progress</span><span class="sh-l"></span>'+selDrop+'</div><div class="cd reveal"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--tx2)">Net Earned vs Purchase Price</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:13px;color:var(--'+(pct>=100?'grn':pct>=50?'amb':'tx')+')">'+pct+'%</span></div><div class="be-bar"><div class="be-fill '+color+'" style="width:'+pct+'%"></div></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3)"><span>Net Earned: <strong style="color:var(--tx)">'+fmt$(netEarned)+'</strong></span><span>Goal: <strong style="color:var(--tx)">'+fmt$(totalPP)+'</strong></span>'+(pct>=100?'<span style="color:var(--grn);font-weight:700">RECOVERED!</span>':'')+'</div></div>';
   }
 
-  // Fleet vehicles snapshot
+  // Fleet vehicles snapshot — always shown, sorted by profitability
   const fvH=(()=>{
-    if(!f.length)return'';
-    const MAX=5;
-    const carRow=(v)=>{
+    if(!f.length){
+      const emptyCard='<div class="cd reveal" style="text-align:center;padding:24px 16px">'
+        +'<div style="font-size:28px;margin-bottom:8px;opacity:.4">🚗</div>'
+        +'<div style="font-weight:600;font-size:13px;margin-bottom:4px">No vehicles yet</div>'
+        +'<div style="font-size:11px;color:var(--tx3);margin-bottom:14px">Add your first car to start tracking revenue and performance.</div>'
+        +(canEdit()?'<button class="btn btn-o" onclick="showM(\'vehicle\')">+ Add Vehicle</button>':'')
+        +'</div>';
+      return'<div class="sh reveal"><span class="sh-t">My Fleet</span><span class="sh-l"></span></div>'+emptyCard;
+    }
+    // Compute monthly profit per vehicle for sorting
+    const mnow=new Date(),mStr=mnow.getFullYear()+'-'+(mnow.getMonth()+1).toString().padStart(2,'0');
+    const scored=f.map((v,i)=>{
+      const mRev=b.filter(x=>Number(x.ci)===i&&(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
+      const mExp=e.filter(x=>Number(x.ci)===i&&(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
+      const trips=b.filter(x=>Number(x.ci)===i).length;
+      return{v,i,mProfit:mRev-mExp,mRev,trips};
+    }).sort((a,b_)=>b_.mProfit-a.mProfit||b_.trips-a.trips);
+    const carRow=({v,i,mProfit,mRev,trips})=>{
       const sc=v.status==='listed'?'var(--grn)':v.status==='in_service'?'var(--amb)':'var(--tx3)';
       const sl=v.status==='listed'?'Listed':v.status==='in_service'?'In Service':'Unlisted';
+      const profColor=mProfit>0?'var(--grn)':mProfit<0?'var(--red)':'var(--tx3)';
       return'<div class="lr" onclick="sw(\'fleet\',null)" style="cursor:pointer">'
-        +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+(v.trim?' '+v.trim:'')+'</div>'
-        +(v.mileage?'<div style="font-size:10px;color:var(--tx3)">'+Number(v.mileage).toLocaleString()+' mi</div>':'')
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+(v.trim?' '+v.trim:'')+'</div>'
+        +'<div style="font-size:10px;color:var(--tx3);margin-top:1px">'+(v.rate?fmt$(v.rate)+'/day · ':'')+(trips)+' trip'+(trips!==1?'s':'')+' total</div>'
         +'</div>'
-        +(v.rate?'<span style="font-size:10px;color:var(--acc2);white-space:nowrap">'+fmt$(v.rate)+'/day</span>':'')
-        +'<span class="badge" style="background:transparent;border:1px solid '+sc+';color:'+sc+'">'+sl+'</span>'
+        +'<div style="text-align:right;white-space:nowrap">'
+        +'<div style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:12px;color:'+profColor+'">'+fmt$(mProfit)+'<span style="font-size:9px;color:var(--tx3);font-weight:400"> /mo</span></div>'
+        +'<span class="badge" style="background:transparent;border:1px solid '+sc+';color:'+sc+';margin-top:2px;display:inline-block">'+sl+'</span>'
+        +'</div>'
         +'</div>';
     };
-    let rows=f.slice(0,MAX).map(carRow).join('');
-    if(f.length>MAX){
-      const extra=f.length-MAX;
-      rows+='<div id="fv-more" style="display:none">'+f.slice(MAX).map(carRow).join('')+'</div>';
-      rows+='<button onclick="var m=document.getElementById(\'fv-more\'),o=m.style.display!==\'none\';m.style.display=o?\'none\':\'\';this.textContent=o?\'See '+extra+' More\':\'Show Less\'" style="width:100%;padding:7px;background:transparent;border:1px dashed rgba(181,136,99,.2);border-radius:6px;color:var(--acc2);font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:6px">See '+extra+' More</button>';
-    }
-    return'<div class="sh reveal"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span><span class="sh-a" onclick="sw(\'fleet\',null)">View All</span></div><div class="lc reveal">'+rows+'</div>';
+    return'<div class="sh reveal"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span><span class="sh-a" onclick="sw(\'fleet\',null)">Manage</span></div>'
+      +'<div class="lc reveal">'+scored.map(carRow).join('')+'</div>';
   })();
 
-  // Upcoming surge events
-  const surgeEvts=[
-    {name:'F1 Grand Prix',date:'Nov 18-21',mult:'2.5x'},
-    {name:'EDC Las Vegas',date:'May 15-17',mult:'1.8x'},
-    {name:'NFR',date:'Dec (TBD)',mult:'1.5x'},
-    {name:"New Year's Eve",date:'Dec 31',mult:'2.0x'},
-  ];
-  const surgeH='<div class="sh reveal"><span class="sh-t">Upcoming Surge Events</span><span class="sh-l"></span></div><div class="cd reveal">'+surgeEvts.map(s=>'<div class="surge-ev"><div class="se-name">'+s.name+'</div><div class="se-meta">'+s.date+' &middot; Recommended rate: <strong style="color:var(--sa)">'+s.mult+' base rate</strong></div></div>').join('')+'</div>';
+  // Upcoming surge events — dynamic from selected market
+  const _surgeMkt=D.get('turoMkt','Las Vegas');
+  const _surgeData=(MARKETS&&MARKETS[_surgeMkt]&&MARKETS[_surgeMkt].surgeCal)||[['Nov','F1 Grand Prix','+150-200%'],['May','EDC Las Vegas','+75-100%'],['Dec','NFR / NYE','+100-150%'],['Jan','CES','+100-150%']];
+  const _curMo=new Date().getMonth();
+  const _MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Sort so next upcoming months appear first
+  const _surgeSort=[..._surgeData].sort((a,b_)=>{
+    const ai=_MONTHS.indexOf(a[0]),bi=_MONTHS.indexOf(b_[0]);
+    const ad=ai>=_curMo?ai-_curMo:ai+12-_curMo;
+    const bd=bi>=_curMo?bi-_curMo:bi+12-_curMo;
+    return ad-bd;
+  });
+  const surgeH='<div class="sh reveal"><span class="sh-t">Surge Events — '+_surgeMkt+'</span><span class="sh-l"></span><span class="sh-a" onclick="sw(\'set\',null)">Change Market</span></div>'
+    +'<div class="cd reveal">'+_surgeSort.slice(0,6).map(s=>{
+      const isThisMo=s[0]===_MONTHS[_curMo];
+      return'<div class="surge-ev"'+(isThisMo?' style="background:rgba(181,136,99,.06);border-radius:6px;padding:4px 8px;margin:-4px -8px"':'')+'>'+
+        '<div class="se-name">'+(isThisMo?'<span style="background:var(--acc2);color:var(--bg);font-size:9px;font-weight:700;border-radius:3px;padding:1px 5px;margin-right:5px;vertical-align:middle">NOW</span>':'')+s[1]+'</div>'+
+        '<div class="se-meta"><strong style="color:var(--tx2)">'+s[0]+'</strong> &middot; Boost rate: <strong style="color:var(--sa)">'+s[2]+'</strong></div>'+
+        '</div>';
+    }).join('')+'</div>';
 
   document.getElementById('pg-dash').innerHTML=(SA?'<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:7px"><svg width="12" height="12" viewBox="0 0 24 24" fill="var(--sa)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><strong style="color:var(--sa)">Super Admin Mode</strong></div>':'')
     +'<div class="sh reveal"><span class="sh-t">'+(CT?CT.name+' &mdash; ':'')+'Overview</span><span class="sh-l"></span>'+(isOwner()&&CT?'<span class="sh-a" onclick="showEditTeam()">&#9998; Edit Team</span>':'')+'</div>'
@@ -2131,9 +2162,31 @@ function renderCal(){
     +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(181,136,99,.4);margin-right:4px"></span>Detailing</span>'
     +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,107,53,.4);margin-right:4px"></span>Surge Event</span>'
     +'</div>'
-    +'<div class="sh" style="margin-top:18px"><span class="sh-t">2026 Las Vegas Surge Calendar</span><span class="sh-l"></span></div>'
-    +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:10px;line-height:1.6">Raise your Turo rates during these events. Multiply your base rate by the suggested multiplier.</div>'
-    +Object.entries(SURGE_EVENTS).flatMap(([ym,evts])=>evts.map(e=>'<div class="surge-ev"><div class="se-name">'+e.name+'</div><div class="se-meta">'+ym+'-'+e.d+' &middot; Recommended: <strong style="color:var(--sa)">'+e.mult+' base rate</strong></div></div>')).join('')+'</div>';
+    +(()=>{
+      const calMkt=D.get('turoMkt','Las Vegas');
+      const calSurgeCal=(MARKETS&&MARKETS[calMkt]&&MARKETS[calMkt].surgeCal)||[];
+      const curMoIdx=new Date().getMonth();
+      const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const sorted=[...calSurgeCal].sort((a,b_)=>{
+        const ai=MON.indexOf(a[0]),bi=MON.indexOf(b_[0]);
+        const ad=ai>=curMoIdx?ai-curMoIdx:ai+12-curMoIdx;
+        const bd=bi>=curMoIdx?bi-curMoIdx:bi+12-curMoIdx;
+        return ad-bd;
+      });
+      if(!sorted.length)return'';
+      return'<div class="sh" style="margin-top:18px"><span class="sh-t">'+calMkt+' Surge Calendar</span><span class="sh-l"></span><span class="sh-a" onclick="sw(\'set\',null)">Change Market</span></div>'
+        +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:10px;line-height:1.6">Raise your Turo daily rate during these events for maximum revenue.</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">'
+        +sorted.map((s,idx)=>{
+          const isNow=s[0]===MON[curMoIdx];
+          return'<div style="background:var(--sf);border-radius:6px;padding:8px 10px'+(isNow?';border:1px solid rgba(181,136,99,.4)':'')+'">'+
+            '<div style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;color:var(--acc2);margin-bottom:2px">'+s[0]+(isNow?' <span style="background:var(--acc2);color:var(--bg);font-size:8px;border-radius:3px;padding:1px 4px;vertical-align:middle">NOW</span>':'')+'</div>'+
+            '<div style="font-size:11px;font-weight:600;color:var(--tx)">'+s[1]+'</div>'+
+            '<div style="font-size:10px;color:var(--sa);font-weight:700">'+s[2]+'</div>'+
+            '</div>';
+        }).join('')
+        +'</div></div>';
+    })();
 }
 
 // ── WORK LOG ──
