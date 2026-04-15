@@ -284,7 +284,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="auth-box">
   <div class="auth-logo" id="auth-logo">
     <span class="logo-dot"></span><span class="logo-title">Fleet Manager</span>
-    <div style="font-size:10px;color:var(--tx3);margin-top:5px;letter-spacing:1px">LAS VEGAS FLEET OPERATIONS</div>
+    <div style="font-size:10px;color:var(--tx3);margin-top:5px;letter-spacing:1px">FLEET OPERATIONS</div>
   </div>
   <div class="auth-tabs">
     <button class="auth-tab a" onclick="switchTab('login')">Sign In</button>
@@ -1433,6 +1433,18 @@ function renderDash(){
 }
 </script>
 <script>
+// ── TURO MARKET DATA ──
+const MARKETS={
+  'Las Vegas':{loc:'Las+Vegas',zip:'89014',seg:{sport:{daily:[150,450],trips:10,occ:52,comp:'Sport/exotic segment. Strong event-weekend demand. Verify comps at Turo.'},luxury:{daily:[95,220],trips:12,occ:58,comp:'Competitive luxury segment. Strong convention + business demand.'},truck:{daily:[75,145],trips:11,occ:62,comp:'Pickups/SUVs hold steady. Construction, airport, tourist traffic.'},economy:{daily:[38,75],trips:14,occ:68,comp:'Volume-driven segment. Most competitive. Need a strong listing.'}},surgeM:[0,1.8,1.3,1.3,1.1,1.5,1.2,1.2,1.1,1.1,1.3,1.7,1.6],surgeCal:[['Jan','CES','+100-150%'],['Feb','Super Bowl Wknd','+50-75%'],['Mar','March Madness','+50-75%'],['Apr','Spring Break','+25-40%'],['May','Memorial Day / EDC','+75-100%'],['Jun','EDC / Summer','+40-60%'],['Jul','Independence Day','+40-60%'],['Aug','Summer Peak','+20-35%'],['Sep','Labor Day','+30-50%'],['Oct','Halloween / F1','+75-125%'],['Nov','F1 Grand Prix','+150-200%'],['Dec','NFR / NYE','+100-150%']]},
+  'Miami':{loc:'Miami,+FL',zip:'33101',seg:{sport:{daily:[180,550],trips:11,occ:58,comp:'Luxury/exotic demand is high. Beach and nightlife crowd.'},luxury:{daily:[110,280],trips:13,occ:62,comp:'Strong year-round. Peak Nov–Mar winter season.'},truck:{daily:[65,130],trips:10,occ:55,comp:'Moderate demand. Contractor and construction rentals.'},economy:{daily:[40,85],trips:15,occ:70,comp:'High volume. Airport and tourist traffic drives steady bookings.'}},surgeM:[0,1.2,1.3,1.4,1.2,1.2,1.1,1.1,1.0,1.0,1.1,1.4,1.4],surgeCal:[['Jan','Winter Peak','+20-40%'],['Feb','Super Bowl / Art Week','+50-75%'],['Mar','Ultra / Spring Break','+75-100%'],['Apr','Spring Break Peak','+40-60%'],['May','Memorial Day','+30-50%'],['Jun','Summer Season','+15-25%'],['Jul','July 4th','+25-40%'],['Aug','Summer Peak','+10-20%'],['Sep','Labor Day','+25-40%'],['Oct','Art Basel Preview','+20-35%'],['Nov','Art Basel','+75-100%'],['Dec','New Year\'s Eve','+75-100%']]},
+  'Los Angeles':{loc:'Los+Angeles,+CA',zip:'90001',seg:{sport:{daily:[200,650],trips:10,occ:55,comp:'Competitive exotic market. Strong entertainment industry demand.'},luxury:{daily:[120,320],trips:11,occ:58,comp:'Very competitive. Great photos and reviews are essential.'},truck:{daily:[70,140],trips:10,occ:52,comp:'Film production/crew demand strong. Practical use cases.'},economy:{daily:[42,80],trips:13,occ:64,comp:'High competition. LAX traffic. Must price aggressively.'}},surgeM:[0,1.1,1.2,1.1,1.5,1.3,1.2,1.2,1.1,1.1,1.2,1.1,1.2],surgeCal:[['Jan','Awards Season','+15-30%'],['Feb','Grammys / Oscars Prep','+25-40%'],['Mar','Oscar Week','+50-75%'],['Apr','Coachella Wknd 1 & 2','+75-100%'],['May','Memorial Day','+30-50%'],['Jun','Summer Start','+20-35%'],['Jul','July 4th','+25-40%'],['Aug','Summer Peak','+15-25%'],['Sep','Labor Day','+25-40%'],['Oct','Halloween','+20-35%'],['Nov','Holiday Travel','+15-25%'],['Dec','New Year\'s Eve','+50-75%']]},
+  'Phoenix':{loc:'Phoenix,+AZ',zip:'85001',seg:{sport:{daily:[120,380],trips:9,occ:48,comp:'Emerging market. Spring training and events drive demand.'},luxury:{daily:[80,200],trips:11,occ:55,comp:'Winter visitors peak Oct–Apr. Growing luxury market.'},truck:{daily:[65,130],trips:12,occ:60,comp:'Strong pickup demand. Construction and outdoor tourism.'},economy:{daily:[35,68],trips:14,occ:65,comp:'Solid volume. PHX/SKY airport and snowbird traffic.'}},surgeM:[0,1.4,1.5,1.6,1.3,1.1,0.9,0.9,0.9,1.1,1.2,1.3,1.3],surgeCal:[['Jan','Fiesta Bowl / Winter Peak','+40-60%'],['Feb','Super Bowl / Spring Training','+50-75%'],['Mar','Spring Training Peak','+60-80%'],['Apr','Spring Training End','+30-50%'],['May','Memorial Day','+20-35%'],['Jun','Summer — slow season','-10-20%'],['Jul','July 4th / Heat','+5-15%'],['Aug','Summer Slowdown','-5-15%'],['Sep','Labor Day','+15-30%'],['Oct','Season Returns','+15-25%'],['Nov','Snowbird Arrival','+25-40%'],['Dec','Holiday / Bowl Games','+30-50%']]},
+  'Austin':{loc:'Austin,+TX',zip:'78701',seg:{sport:{daily:[130,400],trips:10,occ:52,comp:'Growing sports car market. COTA F1 is massive.'},luxury:{daily:[85,210],trips:11,occ:56,comp:'Tech money drives solid luxury demand year-round.'},truck:{daily:[60,120],trips:12,occ:62,comp:'Very strong. Construction boom and outdoor lifestyle.'},economy:{daily:[35,68],trips:15,occ:68,comp:'High volume. Airport, UT, and ACL event traffic.'}},surgeM:[0,1.1,1.2,1.8,1.5,1.3,1.2,1.1,1.1,1.4,1.2,1.1,1.2],surgeCal:[['Jan','New Year Recovery','+10-20%'],['Feb','Stock Show','+15-25%'],['Mar','SXSW','+150-200%'],['Apr','ACL Prep / Spring','+20-35%'],['May','Memorial Day','+30-50%'],['Jun','Summer Start','+15-25%'],['Jul','July 4th','+25-40%'],['Aug','Summer','+10-20%'],['Sep','Labor Day','+25-40%'],['Oct','F1 COTA / ACL Fest','+100-150%'],['Nov','Post-F1','+15-25%'],['Dec','New Year\'s Eve','+40-60%']]},
+  'Seattle':{loc:'Seattle,+WA',zip:'98101',seg:{sport:{daily:[120,350],trips:8,occ:44,comp:'Smaller market. Tech crowd values EVs and performance.'},luxury:{daily:[80,200],trips:10,occ:52,comp:'Amazon/Microsoft money. Strong demand in summer months.'},truck:{daily:[65,130],trips:10,occ:55,comp:'Outdoor adventures. Ski, kayak, hike crowd.'},economy:{daily:[35,72],trips:13,occ:60,comp:'SEA airport drives consistent demand.'}},surgeM:[0,1.0,1.0,1.1,1.1,1.2,1.4,1.5,1.5,1.3,1.1,1.0,1.1],surgeCal:[['Jan','Slower Season','+5-10%'],['Feb','Valentine\'s / Slower','+5-15%'],['Mar','Spring Start','+10-20%'],['Apr','Spring Bloom','+15-25%'],['May','Memorial Day','+25-40%'],['Jun','Summer Start','+30-50%'],['Jul','July 4th / Peak Summer','+50-75%'],['Aug','Summer Peak','+40-60%'],['Sep','Labor Day','+30-50%'],['Oct','Fall Colors','+15-25%'],['Nov','Holiday Travel','+10-20%'],['Dec','New Year\'s Eve','+20-35%']]},
+  'Denver':{loc:'Denver,+CO',zip:'80202',seg:{sport:{daily:[110,320],trips:9,occ:46,comp:'Outdoor-adjacent demand. Ski season drives luxury and sport.'},luxury:{daily:[80,195],trips:10,occ:52,comp:'Ski season (Nov–Apr) and events drive premium demand.'},truck:{daily:[70,140],trips:12,occ:62,comp:'Very strong. Ski trips, hiking, outdoor lifestyle.'},economy:{daily:[35,70],trips:13,occ:60,comp:'DEN airport drives consistent demand. Competitive market.'}},surgeM:[0,1.3,1.3,1.2,1.1,1.2,1.3,1.2,1.1,1.1,1.3,1.4,1.3],surgeCal:[['Jan','Ski Peak / New Year','+30-50%'],['Feb','Ski Season Peak','+25-40%'],['Mar','Spring Ski / St. Patrick\'s','+20-35%'],['Apr','Spring Break','+20-35%'],['May','Memorial Day','+25-40%'],['Jun','Summer Start','+20-35%'],['Jul','July 4th / Peak Summer','+30-50%'],['Aug','Summer Peak','+20-30%'],['Sep','Labor Day','+25-40%'],['Oct','Fall Colors','+15-25%'],['Nov','Ski Season Opens','+30-50%'],['Dec','Holiday / Ski Peak','+40-60%']]},
+  'New York':{loc:'New+York,+NY',zip:'10001',seg:{sport:{daily:[200,600],trips:8,occ:45,comp:'Very competitive. Must stand out. Strong weekend demand.'},luxury:{daily:[120,320],trips:9,occ:50,comp:'Consistent demand from finance crowd. Weekend getaways.'},truck:{daily:[80,160],trips:9,occ:50,comp:'Moving, events, practical use. Competitive market.'},economy:{daily:[45,90],trips:13,occ:60,comp:'JFK/LGA/EWR airport traffic. Steady commuter demand.'}},surgeM:[0,1.1,1.2,1.2,1.1,1.2,1.3,1.3,1.2,1.2,1.2,1.1,1.3],surgeCal:[['Jan','New Year Recovery','+10-20%'],['Feb','Valentine\'s Day','+10-20%'],['Mar','Spring Break','+20-35%'],['Apr','Spring Peak','+15-25%'],['May','Memorial Day','+25-40%'],['Jun','Pride / Summer Start','+30-50%'],['Jul','July 4th / Hamptons','+40-60%'],['Aug','Hamptons Peak','+30-50%'],['Sep','Labor Day / US Open','+30-50%'],['Oct','NYC Marathon / Fall','+20-35%'],['Nov','Thanksgiving','+20-35%'],['Dec','New Year\'s Eve','+75-100%']]}
+};
+
 // ── VIN LOOKUP ──
 let cv=null;let depChart=null;
 function renderVin(){
@@ -1498,8 +1510,10 @@ async function lookupVIN(){
       const cd2=await cr.json(); complaints=cd2.results||[];
     }catch(e){}
 
-    // ── Turo LV market by segment ──
-    const TD={sport:{daily:[150,450],trips:10,occ:52,comp:'Sport/exotic segment. Strong event-weekend demand. Verify comps at Turo.'},luxury:{daily:[95,220],trips:12,occ:58,comp:'Competitive luxury segment. Strong convention + business demand.'},truck:{daily:[75,145],trips:11,occ:62,comp:'Pickups/SUVs hold steady. Construction, airport, tourist traffic.'},economy:{daily:[38,75],trips:14,occ:68,comp:'Volume-driven segment. Most competitive. Need strong listing.'}}[seg];
+    // ── Turo market by segment (city from settings) ──
+    const mkt=D.get('turoMkt','Las Vegas');
+    const MKT=MARKETS[mkt]||MARKETS['Las Vegas'];
+    const TD=MKT.seg[seg];
     const dailyMid=Math.round((TD.daily[0]+TD.daily[1])/2);
     const insurEst=Math.round(askPrice*0.012/12);
     const maintEst=isSport||isLux?420:isTruck?280:200;
@@ -1564,9 +1578,9 @@ async function lookupVIN(){
     talkPts.push('Show competing listings on CarGurus/Carvana to anchor price lower');
     talkPts.push('Last Saturday of the month: dealers have quota pressure — best negotiating window');
 
-    // ── Surge Calendar ──
-    const SURGE_M=[0,1.8,1.3,1.3,1.1,1.5,1.2,1.2,1.1,1.1,1.3,1.7,1.6];
-    const surgeCal=[['Jan','CES','+100-150%'],['Feb','Super Bowl Wknd','+50-75%'],['Mar','March Madness','+50-75%'],['Apr','Spring Break','+25-40%'],['May','Memorial Day / EDC','+75-100%'],['Jun','EDC / Summer','+40-60%'],['Jul','Independence Day','+40-60%'],['Aug','Summer Peak','+20-35%'],['Sep','Labor Day','+30-50%'],['Oct','Halloween / F1','+75-125%'],['Nov','F1 Grand Prix','+150-200%'],['Dec','NFR / NYE','+100-150%']];
+    // ── Surge Calendar (from market) ──
+    const SURGE_M=MKT.surgeM;
+    const surgeCal=MKT.surgeCal;
 
     // ── URL parts ──
     const ml=(cv.make).toLowerCase().replace(/[\s-]+/g,'-');
@@ -1636,14 +1650,14 @@ async function lookupVIN(){
     H+='</div></div>';
 
     // ── 05 TURO MARKET DATA ──
-    H+='<div style="margin-bottom:14px">'+SH('05','Turo Market Data — Las Vegas');
+    H+='<div style="margin-bottom:14px">'+SH('05','Turo Market Data \u2014 '+mkt);
     H+='<div class="cd"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">';
     H+='<div class="metric-box"><div class="metric-val" style="color:var(--acc2)">$'+TD.daily[0]+'–$'+TD.daily[1]+'</div><div class="metric-lbl">Daily Rate Range</div></div>';
     H+='<div class="metric-box"><div class="metric-val" style="color:var(--grn)">'+TD.occ+'%</div><div class="metric-lbl">Est. Occupancy</div></div>';
     H+='<div class="metric-box"><div class="metric-val" style="color:var(--amb)">'+TD.trips+'/mo</div><div class="metric-lbl">Est. Trips/Mo</div></div>';
     H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx)">'+fmt$(netMonth)+'</div><div class="metric-lbl">Est. Net/Month</div></div>';
     H+='</div><div style="font-size:11px;color:var(--tx2);margin-bottom:10px">'+TD.comp+'</div>';
-    H+='<a href="https://turo.com/us/en/search?defaultZipCode='+zip+'&location=Las+Vegas&startDate=2026-04-22&endDate=2026-04-24" target="_blank" class="btn btn-s btn-o" style="text-decoration:none;display:inline-flex">View Live Turo Market</a>';
+    H+='<a href="https://turo.com/us/en/search?defaultZipCode='+(MKT.zip||zip)+'&location='+MKT.loc+'&startDate=2026-04-22&endDate=2026-04-24" target="_blank" class="btn btn-s btn-o" style="text-decoration:none;display:inline-flex">View Live Turo Market</a>';
     H+='</div></div>';
 
     // ── 06 PRICING STRATEGY ──
@@ -1653,7 +1667,7 @@ async function lookupVIN(){
     H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Rec. Listing Price</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--acc2)">'+fmt$(recList)+'</div><div style="font-size:10px;color:var(--tx3)">per day</div></div>';
     H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Weekday Rate</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--tx)">'+fmt$(recList)+'</div></div>';
     H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Weekend Rate</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--grn)">'+fmt$(Math.round(recList*1.20))+'</div></div>';
-    H+='</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">LAS VEGAS SURGE CALENDAR</div>';
+    H+='</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">'+mkt.toUpperCase()+' SURGE CALENDAR</div>';
     H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">';
     surgeCal.forEach(([mo,ev,mult],mi)=>{H+='<div style="padding:7px 9px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><span style="font-family:\'Rajdhani\',sans-serif;font-size:12px;font-weight:700;color:var(--acc2)">'+mo+'</span><span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;color:var(--grn)">'+fmt$(Math.round(recList*SURGE_M[mi+1]))+'</span></div><div style="font-size:9px;color:var(--tx2)">'+ev+'</div><div style="font-size:9px;color:var(--amb)">'+mult+'</div></div>';});
     H+='</div><div style="margin-top:10px;font-size:10px;color:var(--tx3)">Start 10–15% below market while building reviews. Raise after 10+ trips. Recommended: '+(adjVal>30000?'2':'1')+'-day minimum trip to reduce wear-per-booking.</div>';
@@ -1802,8 +1816,9 @@ async function lookupVIN(){
 function addFromVIN(){
   if(!cv||!canEdit())return;
   const f=D.fleet();
-  f.push({year:cv.year,make:cv.make,model:cv.model,trim:cv.trim,vin:cv.vin,price:'',rate:'',trips:0,status:'unlisted',mileage:cv.miles||'',purchase_date:''});
-  D.sFleet(f);logAct('Vehicle Added from VIN',cv.year+' '+cv.make+' '+cv.model);toast('Added to fleet — fill in purchase price');
+  const ppVal=document.getElementById('pp-i')?.value.trim()||'';
+  f.push({year:cv.year,make:cv.make,model:cv.model,trim:cv.trim,vin:cv.vin,price:ppVal,rate:'',trips:0,status:'unlisted',mileage:cv.miles||'',purchase_date:''});
+  D.sFleet(f);logAct('Vehicle Added from VIN',cv.year+' '+cv.make+' '+cv.model);toast(ppVal?'Added to fleet with purchase price $'+Number(ppVal).toLocaleString():'Added to fleet — fill in purchase price &amp; rate');
 }
 
 // ── FLEET ──
@@ -2268,6 +2283,13 @@ function renderSet(){
     +'<div style="margin-top:8px"><button class="btn btn-o btn-f btn-s" onclick="showNewTeam()">+ Create New Team</button></div>'
     +'</div>'
 
+    // FLEET PREFERENCES
+    +'<div class="sh"><span class="sh-t">Fleet Preferences</span><span class="sh-l"></span></div>'
+    +'<div class="cd">'
+    +'<div class="cd-r" style="flex-wrap:wrap;gap:8px"><span class="l">Turo Market</span><select onchange="D.set(\'turoMkt\',this.value);toast(\'Market updated to \'+this.value)" style="background:var(--rg2);border:1px solid rgba(181,136,99,.2);color:var(--tx1);padding:4px 10px;border-radius:6px;font-size:12px;font-family:\'Plus Jakarta Sans\',sans-serif;cursor:pointer">'+['Las Vegas','Miami','Los Angeles','Phoenix','Austin','Seattle','Denver','New York'].map(c=>'<option'+(D.get('turoMkt','Las Vegas')===c?' selected':'')+'>'+c+'</option>').join('')+'</select></div>'
+    +'<div style="font-size:10px;color:var(--tx3);margin-top:6px;line-height:1.6">Used for Turo market data, surge calendars, and pricing estimates in the VIN Lookup report.</div>'
+    +'</div>'
+
     // NOTIFICATIONS
     +'<div class="sh"><span class="sh-t">Notifications</span><span class="sh-l"></span></div>'
     +'<div class="cd" id="notif-prefs">'
@@ -2300,7 +2322,7 @@ function renderSet(){
 
     // ABOUT
     +'<div class="sh"><span class="sh-t">About</span><span class="sh-l"></span></div>'
-    +'<div class="cd" style="margin-bottom:14px"><div style="font-size:12px;color:var(--tx2);line-height:1.9">Fleet Manager v6.0<br>Built for Las Vegas Turo hosts.<br>Dashboard &bull; VIN Lookup &bull; Fleet &bull; Calendar &bull; Finances &bull; Team Management<br><br><span style="font-size:10px;color:var(--tx3)">SA: Ctrl+Shift+Alt+F (desktop) &bull; 7 taps logo (mobile)</span></div></div>'
+    +'<div class="cd" style="margin-bottom:14px"><div style="font-size:12px;color:var(--tx2);line-height:1.9">Fleet Manager v6.0<br>Built for Turo hosts.<br>Dashboard &bull; VIN Lookup &bull; Fleet &bull; Calendar &bull; Finances &bull; Team Management<br><br><span style="font-size:10px;color:var(--tx3)">SA: Ctrl+Shift+Alt+F (desktop) &bull; 7 taps logo (mobile)</span></div></div>'
 
     // ACCOUNT & SECURITY
     +'<div class="sh"><span class="sh-t" style="color:var(--red)">Account &amp; Security</span><span class="sh-l"></span></div>'
