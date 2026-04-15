@@ -2731,17 +2731,29 @@ function savePayment(){
 }
 
 // ── FINANCES ──
-let finChart=null;
+let finChart=null,finVehicle='all';
+function fSetVehicle(v){finVehicle=v;renderFin();}
 function renderFin(){
-  const f=D.fleet(),e=D.exps(),ri=D.revImports()||[];
+  const f=D.fleet(),allE=D.exps(),ri=D.revImports()||[];
   const now=new Date(),tm=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
-  const b=D.books();
+  const allB=D.books();
+  // Apply vehicle filter
+  const vidxs=finVehicle==='all'?null:parseInt(finVehicle);
+  const b=vidxs===null?allB:allB.filter(x=>Number(x.ci)===vidxs);
+  const e=vidxs===null?allE:allE.filter(x=>Number(x.ci)===vidxs);
   const mr=b.filter(x=>x.start&&x.start.startsWith(tm)).reduce((s,x)=>s+Number(x.amount||0),0);
   const me=e.filter(x=>x.date&&x.date.startsWith(tm)).reduce((s,x)=>s+Number(x.amount||0),0);
   const net=mr-me;
   const allEarned=b.reduce((s,x)=>s+Number(x.amount||0),0);
   const allExp=e.reduce((s,x)=>s+Number(x.amount||0),0);
   const cats={};e.forEach(x=>{cats[x.category||'Other']=(cats[x.category||'Other']||0)+Number(x.amount||0);});
+  // Vehicle selector pills
+  const vPills='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'
+    +['all',...f.map((_,i)=>String(i))].map(v=>{
+      const lbl=v==='all'?'All Vehicles':(f[Number(v)]?(f[Number(v)].year+' '+f[Number(v)].make+' '+f[Number(v)].model):'Vehicle');
+      const act=finVehicle===v;
+      return'<button onclick="fSetVehicle(\''+v+'\')" style="padding:5px 12px;border-radius:20px;border:1px solid rgba(181,136,99,'+(act?'.6':'.2')+');background:'+(act?'rgba(181,136,99,.15)':'transparent')+';color:'+(act?'var(--acc2)':'var(--tx2)')+';font-size:11px;font-weight:600;cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif">'+lbl+'</button>';
+    }).join('')+'</div>';
 
   // Occupancy
   const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
@@ -2753,8 +2765,10 @@ function renderFin(){
   const allMiles=D.fuels().reduce((s,x)=>s+Number(x.miles||0),0);
   const rpm=allMiles>0?(allEarned/allMiles).toFixed(2):null;
 
+  const finTitle=finVehicle==='all'?'Finances':(f[parseInt(finVehicle)]?(f[parseInt(finVehicle)].year+' '+f[parseInt(finVehicle)].make+' '+f[parseInt(finVehicle)].model):'Finances');
   document.getElementById('pg-fin').innerHTML=
     '<div class="sh"><span class="sh-t">Finances</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'expense\')">+ Expense</span><span class="sh-a" onclick="showM(\'booking\')">+ Trip</span>':'')+'</div>'
+    +(f.length>1?vPills:'')
     +'<div class="g4">'
     +'<div class="sc"><div class="sc-sub">Revenue</div><div class="sc-val grn" data-a="'+mr+'" data-p="$">$0</div><div class="sc-lbl">This Month (Actual)</div></div>'
     +'<div class="sc"><div class="sc-sub">Expenses</div><div class="sc-val red" data-a="'+me+'" data-p="$">$0</div><div class="sc-lbl">This Month</div></div>'
@@ -2780,7 +2794,7 @@ function renderFin(){
     +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:8px;line-height:1.6">Section 179 deduction available for vehicles over 6,000 lbs GVWR. Consult your CPA.</div><div class="cd-r"><span class="l">22% Bracket Savings</span><span class="v" style="color:var(--grn)">'+fmt$(Math.round(allExp*0.22))+'</span></div><div class="cd-r"><span class="l">32% Bracket Savings</span><span class="v" style="color:var(--grn)">'+fmt$(Math.round(allExp*0.32))+'</span></div><div style="font-size:9px;color:var(--tx3);margin-top:8px">Not tax advice &mdash; consult a CPA.</div></div>'
     +'</div></div>';
 
-  // Chart - last 6 months actual
+  // Chart - last 6 months actual (uses filtered b/e)
   const now2=new Date(),months6=[],rv=[],ev=[];
   for(let i=5;i>=0;i--){const d=new Date(now2);d.setMonth(d.getMonth()-i);const ym=d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0');months6.push(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]);rv.push(b.filter(x=>x.start&&x.start.startsWith(ym)).reduce((s,x)=>s+Number(x.amount||0),0));ev.push(e.filter(x=>x.date&&x.date.startsWith(ym)).reduce((s,x)=>s+Number(x.amount||0),0));}
 
@@ -3177,7 +3191,18 @@ function showInviteModal(){
 function buildModals(){
   document.getElementById('ml-vehicle').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Add Vehicle</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Year</label><input type="number" class="fi" id="a-yr" placeholder="2015"></div><div class="fg"><label class="fl">Make</label><input type="text" class="fi" id="a-mk" placeholder="Nissan"></div><div class="fg"><label class="fl">Model</label><input type="text" class="fi" id="a-md" placeholder="Altima"></div><div class="fg"><label class="fl">Trim</label><input type="text" class="fi" id="a-tr" placeholder="2.5 S"></div><div class="fg"><label class="fl">Purchase Price ($)</label><input type="number" class="fi" id="a-pr" placeholder="11000"></div><div class="fg"><label class="fl">Daily Rate ($)</label><input type="number" class="fi" id="a-rt" placeholder="45"></div><div class="fg"><label class="fl">Trips</label><input type="number" class="fi" id="a-tp" placeholder="0"></div><div class="fg"><label class="fl">Current Mileage</label><input type="number" class="fi" id="a-mi" placeholder="60000"></div><div class="fg"><label class="fl">VIN (optional)</label><input type="text" class="fi" id="a-vn" maxlength="17"></div><div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-r btn-f" onclick="saveVeh()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
-  document.getElementById('ml-expense').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Expense</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="e-car"></select></div><div class="fg"><label class="fl">Amount ($)</label><input type="number" class="fi" id="e-amt" placeholder="150"></div><div class="fg"><label class="fl">Category</label><select class="fi" id="e-cat"><option>Maintenance</option><option>Tires</option><option>Brakes</option><option>Insurance</option><option>Cleaning</option><option>Detailing</option><option>Fuel</option><option>Car Wash</option><option>Registration</option><option>Damage Repair</option><option>Other</option></select></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="e-dt"></div><div class="fg"><label class="fl">Notes</label><input type="text" class="fi" id="e-nt" placeholder="Optional"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveExp()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  document.getElementById('ml-expense').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Expense</span><span class="sh-l"></span></div>'
+    +'<div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="e-car"></select></div>'
+    +'<div class="fg"><label class="fl">Amount ($)</label><input type="number" class="fi" id="e-amt" placeholder="150" autocomplete="off"></div>'
+    +'<div class="fg"><label class="fl">Category</label>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="e-cat-chips">'
+    +[['🔧','Maintenance'],['🛞','Tires'],['⛽','Fuel'],['🧽','Cleaning'],['✨','Detailing'],['🛡️','Insurance'],['📋','Registration'],['💥','Damage Repair'],['🔩','Other']].map(([ic,cat])=>'<button type="button" onclick="setExpCat(\''+cat+'\')" id="ec-'+cat.replace(/\s+/g,'')+'" style="padding:5px 10px;border-radius:20px;border:1px solid rgba(181,136,99,.25);background:transparent;color:var(--tx2);font-size:11px;cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif">'+ic+' '+cat+'</button>').join('')
+    +'</div>'
+    +'<select class="fi" id="e-cat" style="display:none"><option>Maintenance</option><option>Tires</option><option>Brakes</option><option>Insurance</option><option>Cleaning</option><option>Detailing</option><option>Fuel</option><option>Car Wash</option><option>Registration</option><option>Damage Repair</option><option>Other</option></select></div>'
+    +'<div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="e-dt" value="'+today()+'"></div>'
+    +'<div class="fg"><label class="fl">Notes</label><input type="text" class="fi" id="e-nt" placeholder="Optional"></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveExp()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  setTimeout(()=>{const el=document.getElementById('e-amt');if(el)el.focus();},80);
 
   document.getElementById('ml-booking').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Trip / Booking</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="b-car"></select></div><div class="fg"><label class="fl">Guest Name</label><input type="text" class="fi" id="b-gst" placeholder="Name from Turo"></div><div class="fg"><label class="fl">Start Date</label><input type="date" class="fi" id="b-sd"></div><div class="fg"><label class="fl">End Date</label><input type="date" class="fi" id="b-ed"></div><div class="fg"><label class="fl">Amount Earned ($)</label><input type="number" class="fi" id="b-amt" placeholder="Enter actual payout from Turo"></div><div class="fg"><label class="fl">Guest Rating (1-5)</label><select class="fi" id="b-rat"><option value="5">&#9733;&#9733;&#9733;&#9733;&#9733;</option><option value="4">&#9733;&#9733;&#9733;&#9733;</option><option value="3">&#9733;&#9733;&#9733;</option><option value="2">&#9733;&#9733;</option><option value="1">&#9733;</option></select></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveBook()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
@@ -3195,13 +3220,31 @@ function buildModals(){
 
   document.getElementById('ml-incident').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Incident</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="i-car"></select></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="i-dt"></div><div class="fg"><label class="fl">Type</label><select class="fi" id="i-type"><option>Flat Tire</option><option>Accident</option><option>Lockout</option><option>Breakdown</option><option>Damage by Guest</option><option>Theft</option><option>Other</option></select></div><div class="fg"><label class="fl">Description</label><input type="text" class="fi" id="i-desc" placeholder="What happened?"></div><div class="fg"><label class="fl">Cost ($)</label><input type="number" class="fi" id="i-cost" placeholder="Repair cost if any"></div><div class="fg"><label class="fl">Claim Filed?</label><select class="fi" id="i-claim"><option value="no">No</option><option value="yes">Yes</option></select></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveIncident()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
-  document.getElementById('ml-csv').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Import Turo Earnings</span><span class="sh-l"></span></div><div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:11px;margin-bottom:12px;font-size:11px;color:var(--tx2);line-height:1.7"><strong style="color:var(--acc2)">How to get your CSV:</strong><br>1. turo.com &rarr; Account &rarr; Tax Information<br>2. Click "Download Earnings" &rarr; Export CSV<br>3. Upload it here</div><input type="file" id="csv-file" accept=".csv" class="fi" style="padding:10px"><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-r btn-f" onclick="importCSV()">Import</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  document.getElementById('ml-csv').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Import Turo Earnings</span><span class="sh-l"></span></div>'
+    +'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:11px;margin-bottom:12px;font-size:11px;color:var(--tx2);line-height:1.7">'
+    +'<strong style="color:var(--acc2)">How to export from Turo:</strong><br>'
+    +'1. turo.com → Account → <strong>Tax Documents</strong><br>'
+    +'2. Or: turo.com → Account → Transaction History → Export<br>'
+    +'3. Download CSV and upload below'
+    +'</div>'
+    +'<div class="fg"><label class="fl">Select CSV File</label><input type="file" id="csv-file" accept=".csv" class="fi" style="padding:10px" onchange="previewCSV(this)"></div>'
+    +'<div id="csv-preview" style="display:none;margin-bottom:12px"></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" id="csv-import-btn" onclick="importCSV()">Import</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 }
 
 // ── SAVE FUNCTIONS ──
 function saveVeh(){if(!canEdit()){toast('Permission denied');return;}const v={year:document.getElementById('a-yr').value,make:document.getElementById('a-mk').value,model:document.getElementById('a-md').value,trim:document.getElementById('a-tr').value,price:document.getElementById('a-pr').value,rate:document.getElementById('a-rt').value,trips:document.getElementById('a-tp').value||0,mileage:document.getElementById('a-mi').value||'',vin:document.getElementById('a-vn').value.toUpperCase(),status:'unlisted',op_status:'available',purchase_date:today()};if(!v.year||!v.make||!v.model){toast('Year, Make, Model required');return;}DB.saveVehicle(v).then(()=>{logAct('Vehicle Added',v.year+' '+v.make+' '+v.model);renderFleet();});hideM();toast('Vehicle added');['a-yr','a-mk','a-md','a-tr','a-pr','a-rt','a-tp','a-mi','a-vn'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
 
-function saveExp(){if(!canEdit()){toast('Permission denied');return;}const amt=document.getElementById('e-amt').value;if(!amt){toast('Amount required');return;}const exp={ci:document.getElementById('e-car').value,amount:amt,category:document.getElementById('e-cat').value,date:document.getElementById('e-dt').value||today(),notes:document.getElementById('e-nt').value,by:CU?.name||''};DB.saveExp(exp);logAct('Expense',document.getElementById('e-cat').value+' $'+amt);hideM();toast('Expense logged');['e-amt','e-nt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
+function setExpCat(cat){
+  document.getElementById('e-cat').value=cat;
+  document.querySelectorAll('#e-cat-chips button').forEach(b=>{
+    const isSel=b.textContent.includes(cat);
+    b.style.background=isSel?'rgba(181,136,99,.2)':'transparent';
+    b.style.borderColor=isSel?'rgba(181,136,99,.6)':'rgba(181,136,99,.25)';
+    b.style.color=isSel?'var(--acc2)':'var(--tx2)';
+  });
+}
+function saveExp(){if(!canEdit()){toast('Permission denied');return;}const amt=document.getElementById('e-amt').value;if(!amt){toast('Amount required');return;}const exp={ci:document.getElementById('e-car').value,amount:amt,category:document.getElementById('e-cat').value||'Other',date:document.getElementById('e-dt').value||today(),notes:document.getElementById('e-nt').value,by:CU?.name||''};DB.saveExp(exp);logAct('Expense',(exp.category)+' $'+amt);hideM();toast('Expense logged');['e-amt','e-nt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
 
 function saveBook(){if(!canEdit()){toast('Permission denied');return;}const g=document.getElementById('b-gst').value.trim(),sd=document.getElementById('b-sd').value,ed=document.getElementById('b-ed').value,amt=document.getElementById('b-amt').value;if(!g||!sd||!ed){toast('Guest, start & end date required');return;}if(!amt){toast('Please enter the amount earned from Turo');return;}const ci=document.getElementById('b-car').value;const book={ci,guest:g,start:sd,end:ed,amount:amt,rating:document.getElementById('b-rat').value,by:CU?.name||''};DB.saveBook(book);DB.incrementTrips(Number(ci));logAct('Trip Logged',g+' '+sd+' to '+ed+' '+fmt$(amt));addNotif('Trip Logged',g+' booked '+sd+' to '+ed+' — '+fmt$(amt));hideM();toast('Trip logged!');['b-gst','b-amt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
 
@@ -3217,7 +3260,50 @@ function saveWash(){if(!canEdit()){toast('Permission denied');return;}const ci=d
 
 function saveIncident(){if(!canEdit()){toast('Permission denied');return;}const ci=document.getElementById('i-car').value,car=D.fleet()[ci]||{};const cost=document.getElementById('i-cost').value;const inc=D.incidents();inc.push({ci,date:document.getElementById('i-dt').value||today(),type:document.getElementById('i-type').value,desc:document.getElementById('i-desc').value,cost:cost||0,claim:document.getElementById('i-claim').value});D.sIncidents(inc);if(cost&&Number(cost)>0){const e=D.exps();e.push({ci,amount:cost,category:'Damage Repair',date:document.getElementById('i-dt').value||today(),notes:document.getElementById('i-desc').value});D.sExps(e);}logAct('Incident',document.getElementById('i-type').value+' - '+(car.year||'')+' '+(car.make||''));addNotif('Incident Logged',document.getElementById('i-type').value+' for '+(car.year||'')+' '+(car.make||''));hideM();toast('Incident logged');}
 
-function importCSV(){if(!canEdit()){toast('Permission denied');return;}const file=document.getElementById('csv-file').files[0];if(!file){toast('Select a CSV file');return;}const reader=new FileReader();reader.onload=function(e){const lines=e.target.result.split('\n').filter(l=>l.trim());const hdrs=lines[0].split(',').map(h=>h.trim().replace(/"/g,''));const rows=lines.slice(1).map(line=>{const vals=line.split(',').map(v=>v.trim().replace(/"/g,''));const obj={};hdrs.forEach((h,i)=>obj[h]=vals[i]||'');return obj;});const ri=D.revImports()||[];let count=0;rows.forEach(r=>{const amt=Number(r['Trip Earnings']||r['Amount']||r['Earnings']||r['Net Earnings']||r['Host earnings']||0);if(amt>0){ri.push({...r,amount:amt,imported:new Date().toISOString()});count++;}});D.sRevImports(ri);logAct('CSV Imported',count+' records');toast('Imported '+count+' records');hideM();};reader.readAsText(file);}
+function _parseCSVLine(line){const vals=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}else cur+=ch;}vals.push(cur.trim());return vals;}
+function _csvRows(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(!lines.length)return{hdrs:[],rows:[]};const hdrs=_parseCSVLine(lines[0]).map(h=>h.replace(/^"|"$/g,''));const rows=lines.slice(1).map(l=>{const vals=_parseCSVLine(l);const o={};hdrs.forEach((h,i)=>o[h]=(vals[i]||'').replace(/^"|"$/g,''));return o;});return{hdrs,rows};}
+function _getAmt(r){const KEYS=['Trip Earnings','Host earnings','Net earnings','Net Earnings','Earnings','Amount','Total','Payout','Revenue','Your earnings','Subtotal'];for(const k of KEYS){const v=Number((r[k]||'').replace(/[$,]/g,''));if(v>0)return v;}return 0;}
+function previewCSV(input){
+  const file=input.files[0];if(!file)return;
+  const prev=document.getElementById('csv-preview');
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const{hdrs,rows}=_csvRows(e.target.result);
+    if(!hdrs.length){prev.style.display='block';prev.innerHTML='<div style="color:var(--red);font-size:11px;padding:8px;background:rgba(196,122,106,.1);border-radius:6px">Empty or unreadable file. Make sure it\'s a CSV text file.</div>';return;}
+    const amtKey=Object.keys(rows[0]||{}).find(k=>_getAmt(rows[0])>0||(k.toLowerCase().includes('earn')||k.toLowerCase().includes('amount')||k.toLowerCase().includes('payout')))||null;
+    const validRows=rows.filter(r=>_getAmt(r)>0);
+    const previewRows=validRows.slice(0,3);
+    if(!validRows.length){prev.style.display='block';prev.innerHTML='<div style="color:var(--amb);font-size:11px;padding:8px;background:rgba(224,159,62,.08);border-radius:6px">Could not find earnings amounts in this CSV. Expected columns like "Trip Earnings" or "Net Earnings". Found columns: <code style="font-size:10px">'+hdrs.join(', ')+'</code></div>';return;}
+    prev.style.display='block';
+    prev.innerHTML='<div style="font-size:11px;color:var(--grn);padding:6px 0;margin-bottom:8px">Found <strong>'+validRows.length+'</strong> earnings records. Preview of first '+previewRows.length+':</div>'
+      +'<div style="background:var(--sf);border-radius:6px;overflow:hidden;border:1px solid var(--bd)">'
+      +previewRows.map((r,i)=>{const amt=_getAmt(r);const date=r['Date']||r['Trip Date']||r['Start Date']||r['Reservation Date']||'';return'<div style="padding:7px 10px;'+(i<previewRows.length-1?'border-bottom:1px solid var(--bd)':'')+';display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--tx2)">'+(date||'No date')+'</span><span style="color:var(--grn);font-weight:700">'+fmt$(amt)+'</span></div>';}).join('')
+      +'</div>';
+  };
+  reader.readAsText(file);
+}
+function importCSV(){
+  if(!canEdit()){toast('Permission denied');return;}
+  const file=document.getElementById('csv-file').files[0];
+  if(!file){toast('Select a CSV file');return;}
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const{hdrs,rows}=_csvRows(e.target.result);
+    if(!hdrs.length){toast('Could not read CSV — empty or invalid format');return;}
+    const validRows=rows.filter(r=>_getAmt(r)>0);
+    if(!validRows.length){toast('No earnings found. Columns: '+hdrs.slice(0,4).join(', ')+'...');return;}
+    const ri=D.revImports()||[];
+    let count=0;
+    validRows.forEach(r=>{
+      const amt=_getAmt(r);
+      const date=r['Date']||r['Trip Date']||r['Start Date']||r['Reservation Date']||'';
+      ri.push({...r,amount:amt,date,imported:new Date().toISOString()});
+      count++;
+    });
+    D.sRevImports(ri);logAct('CSV Imported',count+' records');toast('Imported '+count+' records');hideM();
+  };
+  reader.readAsText(file);
+}
 
 // ── EXPORT ──
 function exportAll(){
