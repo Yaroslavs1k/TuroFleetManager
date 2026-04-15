@@ -1233,7 +1233,7 @@ function launch(){
   if(SA){document.getElementById('sa-banner').classList.add('show');document.body.classList.add('sa-mode');}
   if(CU){
     const av=document.getElementById('nav-av'),nn=document.getElementById('nav-name'),nr=document.getElementById('nav-role');
-    if(av){av.textContent=(CU.name||CU.email||'?')[0].toUpperCase();av.className='u-av'+(SA?' sa':isDev(CU.email)?' dev':'');}
+    if(av){av.className='u-av'+(SA?' sa':isDev(CU.email)?' dev':'');if(CU.avatar){av.textContent='';av.style.backgroundImage='url('+CU.avatar+')';av.style.backgroundSize='cover';av.style.backgroundPosition='center';}else{av.textContent=(CU.name||CU.email||'?')[0].toUpperCase();av.style.backgroundImage='';}}
     if(nn)nn.textContent=CU.name||CU.email;
     if(nr)nr.textContent=SA?'Super Admin':isDev(CU.email)?'Developer':(teamRole()||'--');
   }
@@ -2475,11 +2475,11 @@ function renderSet(){
     +'<div class="sh" style="margin-top:0"><span class="sh-t">Account</span><span class="sh-l"></span></div>'
     +'<div class="cd">'
     +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
-    +'<div style="width:52px;height:52px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(u.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-weight:700;color:#161616;font-size:22px;flex-shrink:0">'+(u.name||u.email||'?')[0].toUpperCase()+'</div>'
+    +(u.avatar?'<div style="width:52px;height:52px;border-radius:50%;flex-shrink:0;overflow:hidden"><img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover"></div>':'<div style="width:52px;height:52px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(u.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-weight:700;color:#161616;font-size:22px;flex-shrink:0">'+(u.name||u.email||'?')[0].toUpperCase()+'</div>')
     +'<div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;margin-bottom:2px">'+(u.name||'--')+'</div><div style="font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis">'+(u.email||'--')+'</div><div style="margin-top:5px">'+rb(SA?'superadmin':teamRole())+'</div></div>'
     +'</div>'
-    +'<button class="btn btn-d btn-f" style="margin-bottom:8px" onclick="showEditProfile()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Name &amp; Email</button>'
-    +'<button class="btn btn-o btn-f" onclick="showChangePassword()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Change Password</button>'
+    +'<button class="btn btn-d btn-f" style="margin-bottom:8px" onclick="showEditProfile()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Edit Profile</button>'
+    +'<button class="btn btn-o btn-f" onclick="showEditAccount()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Edit Account Info</button>'
     +'</div>'
 
     // TEAM SECTION
@@ -2598,48 +2598,115 @@ function toggleNotifPref(key){
 }
 
 function showEditProfile(){
+  const avatarHtml=CU?.avatar
+    ?'<img id="ep-av-preview" src="'+CU.avatar+'" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block">'
+    :'<div id="ep-av-preview" style="width:80px;height:80px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-weight:700;color:#161616;font-size:32px">'+(CU?.name||CU?.email||'?')[0].toUpperCase()+'</div>';
   document.getElementById('ml-profile').innerHTML=
     '<div class="sh" style="margin-top:0"><span class="sh-t">Edit Profile</span><span class="sh-l"></span></div>'
+    +'<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px">'
+    +avatarHtml
+    +'<label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:var(--rg2);border:1px solid rgba(181,136,99,.25);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--tx2);font-family:Rajdhani,sans-serif;font-weight:600">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Photo'
+    +'<input type="file" id="ep-av-file" accept="image/*" style="display:none" onchange="previewAvatar(this)">'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--tx3)">JPG / PNG / WEBP · will be cropped to circle</div>'
+    +'</div>'
     +'<div class="fg"><label class="fl">Display Name</label><input type="text" class="fi" id="ep-name" value="'+(CU?.name||'')+'" placeholder="Your name"></div>'
-    +'<div class="fg"><label class="fl">Email</label><input type="email" class="fi" id="ep-email" value="'+(CU?.email||'')+'" placeholder="you@example.com"></div>'
-    +'<div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:9px;font-size:11px;color:var(--tx3);margin-bottom:12px;line-height:1.6">&#9432; Name changes apply immediately. Email changes require re-login.</div>'
     +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveProfile()">Save Changes</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
   showM('profile');
 }
 
+function previewAvatar(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const canvas=document.createElement('canvas');
+      canvas.width=200;canvas.height=200;
+      const ctx=canvas.getContext('2d');
+      // crop to square center
+      const sz=Math.min(img.width,img.height);
+      const ox=(img.width-sz)/2,oy=(img.height-sz)/2;
+      ctx.drawImage(img,ox,oy,sz,sz,0,0,200,200);
+      const b64=canvas.toDataURL('image/jpeg',0.85);
+      const prev=document.getElementById('ep-av-preview');
+      if(prev.tagName==='IMG'){prev.src=b64;}
+      else{const newImg=document.createElement('img');newImg.id='ep-av-preview';newImg.src=b64;newImg.style.cssText='width:80px;height:80px;border-radius:50%;object-fit:cover;display:block';prev.replaceWith(newImg);}
+      prev._b64=b64;
+      document.getElementById('ep-av-preview')._b64=b64;
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 async function saveProfile(){
   const name=document.getElementById('ep-name')?.value.trim();
-  const email=document.getElementById('ep-email')?.value.trim().toLowerCase();
   if(!name){toast('Name required');return;}
-  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Valid email required');return;}
-  const nameChanged=name!==CU.name;
-  const emailChanged=email!==CU.email;
+  const prevEl=document.getElementById('ep-av-preview');
+  const newAvatar=prevEl?._b64||null;
   CU.name=name;
-  if(!emailChanged){
-    localStorage.setItem('cu',JSON.stringify(CU));
-    if(CONFIGURED&&sb){try{await sb.from('profiles').update({name}).eq('id',CU.id);}catch(e){}}
-    // Update team owner name
-    if(CT&&CT.ownerId===CU.id){const teams=D.teams();const t=teams.find(x=>x.id===CT.id);if(t){t.ownerName=name;D.sTeams(teams);CT=t;}}
-    hideM();
-    const av=document.getElementById('nav-av'),nn=document.getElementById('nav-name');
-    if(av)av.textContent=name[0].toUpperCase();
-    if(nn)nn.textContent=name;
-    renderSet();
-    toast('Profile updated!');
+  if(newAvatar)CU.avatar=newAvatar;
+  localStorage.setItem('cu',JSON.stringify(CU));
+  if(CONFIGURED&&sb){try{await sb.from('profiles').update({name}).eq('id',CU.id);}catch(e){}}
+  if(CT&&CT.ownerId===CU.id){const teams=D.teams();const t=teams.find(x=>x.id===CT.id);if(t){t.ownerName=name;D.sTeams(teams);CT=t;}}
+  hideM();
+  // Update nav pill
+  const av=document.getElementById('nav-av'),nn=document.getElementById('nav-name');
+  if(av){
+    if(CU.avatar){av.textContent='';av.style.backgroundImage='url('+CU.avatar+')';av.style.backgroundSize='cover';av.style.backgroundPosition='center';}
+    else{av.textContent=name[0].toUpperCase();av.style.backgroundImage='';}
+  }
+  if(nn)nn.textContent=name;
+  renderSet();
+  toast('Profile updated!');
+}
+
+function showEditAccount(){
+  document.getElementById('ml-profile').innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Account Info</span><span class="sh-l"></span></div>'
+    +'<div class="adm-tabs" style="margin-bottom:16px">'
+    +'<button class="set-stab adm-tab a" id="ea-tab-email" onclick="eaTab(\'email\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Change Email</button>'
+    +'<button class="set-stab adm-tab" id="ea-tab-pw" onclick="eaTab(\'pw\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Change Password</button>'
+    +'</div>'
+    +'<div id="ea-email-pane">'
+    +'<div class="fg"><label class="fl">Current Email</label><input type="text" class="fi" value="'+(CU?.email||'')+'" disabled style="opacity:.5"></div>'
+    +'<div class="fg"><label class="fl">New Email</label><input type="email" class="fi" id="ea-new-email" placeholder="new@example.com" autocomplete="email"></div>'
+    +'<div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:9px;font-size:11px;color:var(--tx3);margin-bottom:12px;line-height:1.6">&#9432; A verification link will be sent to the new address.</div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveEmail()">Update Email</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>'
+    +'</div>'
+    +'<div id="ea-pw-pane" style="display:none">'
+    +'<div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters" autocomplete="new-password"></div>'
+    +'<div class="fg"><label class="fl">Confirm Password</label><input type="password" class="fi" id="cp-confirm" placeholder="Repeat password" autocomplete="new-password"></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="savePassword()">Update Password</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>'
+    +'</div>';
+  showM('profile');
+}
+
+function eaTab(tab,el){
+  document.querySelectorAll('#m-profile .set-stab').forEach(t=>t.classList.remove('a'));
+  if(el)el.classList.add('a');
+  document.getElementById('ea-email-pane').style.display=tab==='email'?'':'none';
+  document.getElementById('ea-pw-pane').style.display=tab==='pw'?'':'none';
+}
+
+async function saveEmail(){
+  const newEmail=document.getElementById('ea-new-email')?.value.trim().toLowerCase();
+  if(!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)){toast('Enter a valid email');return;}
+  if(newEmail===CU.email){toast('That is already your email');return;}
+  if(CONFIGURED&&sb){
+    try{
+      await sb.auth.updateUser({email:newEmail});
+      await sb.from('profiles').update({email:newEmail}).eq('id',CU.id);
+      CU.email=newEmail;localStorage.setItem('cu',JSON.stringify(CU));
+      hideM();renderSet();
+      toast('Verification sent to '+newEmail+' — check your inbox!');
+    }catch(e){toast('Error: '+e.message);}
   } else {
-    CU.email=email;
-    localStorage.setItem('cu',JSON.stringify(CU));
-    if(CONFIGURED&&sb){
-      try{
-        await sb.auth.updateUser({email,data:{name}});
-        await sb.from('profiles').update({name,email}).eq('id',CU.id);
-        toast('Verification email sent to '+email+' — check your inbox!');
-      }catch(e){toast('Error: '+e.message);return;}
-    } else {
-      const users=D.users().map(u=>u.id===CU.id?{...u,name,email}:u);D.sUsers(users);
-      toast('Profile updated!');
-    }
-    hideM();renderSet();
+    const users=D.users().map(u=>u.id===CU.id?{...u,email:newEmail}:u);D.sUsers(users);
+    CU.email=newEmail;localStorage.setItem('cu',JSON.stringify(CU));
+    hideM();renderSet();toast('Email updated!');
   }
 }
 
