@@ -1385,6 +1385,30 @@ function renderDash(){
     beH='<div class="sh reveal"><span class="sh-t">Break-Even Progress</span><span class="sh-l"></span><span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;color:var(--acc2);margin-left:10px">'+v.year+' '+v.make+' '+v.model+'</span></div><div class="cd reveal"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--tx2)">Net Earned vs Purchase Price</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:13px">'+pct+'%</span></div><div class="be-bar"><div class="be-fill '+color+'" style="width:'+pct+'%"></div></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3)"><span>Net Earned: <strong style="color:var(--tx)">'+fmt$(netEarned)+'</strong></span><span>Goal: <strong style="color:var(--tx)">'+fmt$(pp)+'</strong></span></div></div>';
   }
 
+  // Fleet vehicles snapshot
+  const fvH=(()=>{
+    if(!f.length)return'';
+    const MAX=5;
+    const carRow=(v)=>{
+      const sc=v.status==='listed'?'var(--grn)':v.status==='in_service'?'var(--amb)':'var(--tx3)';
+      const sl=v.status==='listed'?'Listed':v.status==='in_service'?'In Service':'Unlisted';
+      return'<div class="lr" onclick="sw(\'fleet\',null)" style="cursor:pointer">'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+(v.trim?' '+v.trim:'')+'</div>'
+        +(v.mileage?'<div style="font-size:10px;color:var(--tx3)">'+Number(v.mileage).toLocaleString()+' mi</div>':'')
+        +'</div>'
+        +(v.rate?'<span style="font-size:10px;color:var(--acc2);white-space:nowrap">'+fmt$(v.rate)+'/day</span>':'')
+        +'<span class="badge" style="background:transparent;border:1px solid '+sc+';color:'+sc+'">'+sl+'</span>'
+        +'</div>';
+    };
+    let rows=f.slice(0,MAX).map(carRow).join('');
+    if(f.length>MAX){
+      const extra=f.length-MAX;
+      rows+='<div id="fv-more" style="display:none">'+f.slice(MAX).map(carRow).join('')+'</div>';
+      rows+='<button onclick="var m=document.getElementById(\'fv-more\'),o=m.style.display!==\'none\';m.style.display=o?\'none\':\'\';this.textContent=o?\'See '+extra+' More\':\'Show Less\'" style="width:100%;padding:7px;background:transparent;border:1px dashed rgba(181,136,99,.2);border-radius:6px;color:var(--acc2);font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:6px">See '+extra+' More</button>';
+    }
+    return'<div class="sh reveal"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span><span class="sh-a" onclick="sw(\'fleet\',null)">View All</span></div><div class="lc reveal">'+rows+'</div>';
+  })();
+
   // Upcoming surge events
   const surgeEvts=[
     {name:'F1 Grand Prix',date:'Nov 18-21',mult:'2.5x'},
@@ -1403,17 +1427,18 @@ function renderDash(){
     +'<div class="sc reveal reveal-d4" onclick="sw(\'fin\',null)"><div class="sc-sub">Occupancy</div><div class="sc-val amb" data-a="'+occ+'" data-s="%" data-d="450">0%</div><div class="sc-lbl">This Month</div></div>'
     +'</div>'
     +naH
-    +'<div class="g21" style="margin-top:14px">'
-    +'<div class="reveal reveal-d1"><div class="sh"><span class="sh-t">Revenue Trend</span><span class="sh-l"></span></div><div class="cc" onclick="sw(\'fin\',null)"><canvas id="rev-c"></canvas></div></div>'
+    +'<div class="g21" style="margin-top:14px;align-items:stretch">'
+    +'<div class="reveal reveal-d1" style="display:flex;flex-direction:column"><div class="sh"><span class="sh-t">Revenue Trend</span><span class="sh-l"></span></div><div class="cc" style="flex:1;min-height:220px" onclick="sw(\'fin\',null)"><canvas id="rev-c" style="max-height:none!important"></canvas></div></div>'
     +'<div class="reveal reveal-d2">'
     +'<div class="sh"><span class="sh-t">Upcoming Bookings</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'booking\')">+ Add</span>':'')+'</div>'
     +'<div class="lc">'+ubH+'</div>'
-    +'<div class="sh reveal reveal-d3"><span class="sh-t">Maintenance Due</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'maint\')">+ Log</span>':'')+'</div>'
-    +'<div class="lc reveal reveal-d4">'+mdH+'</div>'
+    +'<div class="sh" style="margin-top:14px"><span class="sh-t">Maintenance Due</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'maint\')">+ Log</span>':'')+'</div>'
+    +'<div class="lc">'+mdH+'</div>'
+    +'<div class="sh" style="margin-top:14px"><span class="sh-t">Detailing Status</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'detail\')">+ Log</span>':'')+'</div>'
+    +'<div class="lc">'+daH+'</div>'
     +'</div></div>'
     +beH
-    +'<div class="sh reveal"><span class="sh-t">Detailing Status</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'detail\')">+ Log</span>':'')+'</div>'
-    +'<div class="lc reveal">'+daH+'</div>'
+    +fvH
     +surgeH
     +'<div class="sh reveal"><span class="sh-t">Quick Actions</span><span class="sh-l"></span></div>'
     +'<div class="reveal" style="display:flex;gap:8px;flex-wrap:wrap">'
@@ -2296,7 +2321,6 @@ function renderSet(){
     +renderNotifToggles()
     +'</div>'
 
-    +supaSection
     +'</div>'
 
     // RIGHT COLUMN
@@ -2354,7 +2378,8 @@ function renderAdminInSet(){
   c.innerHTML=
     '<div class="sh" style="margin-top:0"><span class="sh-t">Admin Panel</span><span class="sh-l"></span>'+(CT?'<span style="font-size:11px;color:var(--tx3)">'+CT.name+'</span>':'')+'</div>'
     +'<div class="adm-tabs"><button class="adm-tab a" onclick="sAt(\'users\',this)">Users &amp; Roles</button><button class="adm-tab" onclick="sAt(\'pending\',this)">Pending</button><button class="adm-tab" onclick="sAt(\'activity\',this)">Activity Log</button><button class="adm-tab" onclick="sAt(\'notif\',this)">Send Notification</button>'+(SA||isDev(CU?.email)?'<button class="adm-tab" onclick="sAt(\'sa\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2.5"/><polyline points="6 9 3.5 12 6 15"/><line x1="10" y1="12" x2="16" y2="12"/></svg> Dev</button>':'')+'</div>'
-    +'<div id="adm-c"></div>';
+    +'<div id="adm-c"></div>'
+    +(SA||isDev(CU?.email)?'<div class="sh" style="margin-top:22px"><span class="sh-t">Developer Settings</span><span class="sh-l"></span></div><div class="cd"><div style="margin-bottom:10px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'">'+(CONFIGURED?'Supabase Connected':'localStorage Mode')+'</span></div>'+(CONFIGURED?'<p style="font-size:12px;color:var(--grn);margin-bottom:8px">Connected to Supabase cloud.</p><div class="cd-r"><span class="l">Project URL</span><span class="v" style="font-family:monospace;font-size:10px">yeohfqzdgvhwyjmezdii.supabase.co</span></div>':'<div style="font-size:11px;color:var(--tx2);line-height:1.7">Running in demo mode.</div>')+'</div>':'');
   sAt('users',c.querySelector('.adm-tab'));
 }
 
