@@ -10,6 +10,7 @@
 <title>Fleet Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1433,78 +1434,367 @@ function renderDash(){
 </script>
 <script>
 // ── VIN LOOKUP ──
-let cv=null;
+let cv=null;let depChart=null;
 function renderVin(){
-  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:800px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7">Enter a VIN to decode vehicle details, check open recalls, see a Turo ROI estimate, and get research links. Use the <strong style="color:var(--acc2)">Full Claude Report</strong> button for a complete 16-section fleet analysis including KBB value, depreciation curve, and exit strategy.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px">Enter a VIN to see vehicle details, pricing, and fleet analysis.</div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; checking recalls...</div></div>';
+  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:900px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div class="fg"><div class="fl">Asking / Purchase Price (optional)</div><input type="number" class="fi" id="pp-i" placeholder="e.g. 28500"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7">Generates a full <strong style="color:var(--acc2)">14-section fleet analysis</strong> inline &mdash; Negotiation Card, valuation, Turo market data, ROI calculator, damage risk score, depreciation curve, exit strategy, and more.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px">Enter a VIN to generate your full fleet analysis report.</div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; running fleet analysis...</div></div>';
 }
 
 async function lookupVIN(){
   const vin=document.getElementById('vin-i').value.trim().toUpperCase();
   const miles=document.getElementById('mi-i').value.trim();
   const zip=document.getElementById('zi-i').value.trim()||'89014';
+  const pp=document.getElementById('pp-i').value.trim();
   if(vin.length!==17){toast('VIN must be 17 characters');return;}
   document.getElementById('vin-res').style.display='none';
   document.getElementById('vin-load').style.display='block';
   document.getElementById('lu-btn').disabled=true;
   document.getElementById('vin-side').style.display='none';
+  if(depChart){depChart.destroy();depChart=null;}
   try{
     const dr=await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/'+vin+'?format=json');
     const dd=await dr.json();
     if(!dd.Results||!dd.Results.length||dd.Results[0].ErrorCode==='1'){throw new Error('VIN not recognized. Please check and try again.');}
     const v=dd.Results[0];
-    cv={vin,miles,zip,year:v.ModelYear,make:v.Make,model:v.Model,trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:v.EngineHP,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,mpg:v.FuelTypePrimary&&v.FuelTypePrimary.toLowerCase().includes('electric')?'EV':'~28-35'};
+    cv={vin,miles,zip,pp,year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,trans:v.TransmissionStyle};
 
-    // Valuation estimate
-    const age=new Date().getFullYear()-parseInt(cv.year||'2020');
-    const isLux=['BMW','MERCEDES-BENZ','AUDI','LEXUS','CADILLAC','LINCOLN','ACURA','INFINITI','GENESIS'].includes(cv.make);
-    const isSport=cv.model&&(cv.model.includes('M4')||cv.model.includes('M3')||cv.model.includes('Corvette')||cv.model.includes('Mustang')||cv.model.includes('Camaro'));
-    const baseMsrp=isSport?75000:isLux?55000:cv.hp>250?38000:25000;
-    const depRate=isSport?0.06:isLux?0.12:0.08;
-    const est=Math.round(baseMsrp*Math.pow(1-depRate,age));
-    const tgt=Math.round(est*0.88),mx=Math.round(est*0.97),wk=Math.round(est*1.05);
+    // ── Classification ──
+    const mkUP=cv.make.toUpperCase();
+    const mdUP=cv.model.toUpperCase();
+    const LUX_MAKES=['BMW','MERCEDES-BENZ','AUDI','LEXUS','CADILLAC','LINCOLN','ACURA','INFINITI','GENESIS','PORSCHE','VOLVO','JAGUAR','LAND ROVER','ALFA ROMEO','MASERATI'];
+    const SPORT_KW=['CORVETTE','MUSTANG','CAMARO','CHALLENGER','CHARGER','M3','M4','M5','M6','M8','GT-R','NSX','WRX','BRZ','GR86','SUPRA','VIPER','GT500','MACH 1','HELLCAT','DEMON'];
+    const isLux=LUX_MAKES.includes(mkUP);
+    const isSport=SPORT_KW.some(k=>mdUP.includes(k))||cv.hp>360;
+    const isTruck=['truck','pickup'].some(b=>(cv.body||'').toLowerCase().includes(b));
+    const seg=isSport?'sport':isLux?'luxury':isTruck?'truck':'economy';
+    const segLabel=isSport?'Sport/Performance':isLux?'Luxury':isTruck?'Truck/SUV':'Economy';
 
-    // Turo ROI estimate for Las Vegas
-    const dailyRate=isLux||isSport?150:cv.make==='NISSAN'||cv.make==='TOYOTA'?45:65;
-    const tripsPerMonth=8,avgDays=2.5;
-    const grossMonth=dailyRate*tripsPerMonth*avgDays;
-    const netMonth=Math.round(grossMonth*0.75); // after Turo 25%
-    const monthsBreakeven=tgt>0?Math.ceil(tgt/netMonth):999;
+    // ── Valuation ──
+    const yr=parseInt(cv.year||'2020');
+    const age=Math.max(0,2026-yr);
+    const msrpEst=isSport?72000:isLux?58000:isTruck?48000:26000;
+    const DEP_Y=isSport?[.15,.09,.09,.08,.08,.07,.07,.06,.06,.06]:isLux?[.22,.13,.13,.12,.12,.10,.09,.08,.08,.07]:isTruck?[.15,.11,.11,.10,.10,.09,.08,.07,.07,.06]:[.18,.12,.12,.11,.11,.09,.08,.08,.07,.07];
+    let curVal=msrpEst;
+    for(let i=0;i<Math.min(age,DEP_Y.length);i++) curVal*=(1-DEP_Y[i]);
+    curVal=Math.round(curVal);
+    const expMiles=age*13000;
+    const actMiles=parseInt(miles)||expMiles;
+    const miDiff=expMiles>0?(expMiles-actMiles)/expMiles:0;
+    const miAdj=miDiff>0.5?0.20:miDiff>0.25?0.12:miDiff>0.10?0.07:miDiff<-0.50?-0.20:miDiff<-0.25?-0.12:miDiff<-0.10?-0.07:0;
+    const adjVal=Math.round(curVal*(1+miAdj));
+    const depPct=Math.round((1-curVal/msrpEst)*100);
+    const askPrice=parseInt(pp)||adjVal;
+    const tgt=Math.round(adjVal*0.90);
+    const mx=Math.round(adjVal*0.97);
+    const wk=Math.round(adjVal*1.06);
 
-    const rows=[['Year',cv.year],['Make',cv.make],['Model',cv.model],cv.trim&&['Trim',cv.trim],cv.body&&['Body',cv.body],cv.engine&&['Engine',cv.engine+' '+(cv.cyl?cv.cyl+'-cyl':'')+' '+(cv.hp?cv.hp+' HP':'')],cv.drive&&['Drive',cv.drive],cv.fuel&&['Fuel',cv.fuel],miles&&['Mileage',Number(miles).toLocaleString()+' mi'],cv.gvwr&&['GVWR',cv.gvwr],cv.plant&&['Plant',cv.plant]].filter(Boolean);
-
-    let rh='',ch='';
+    // ── Recalls + Complaints (parallel) ──
+    let recalls=[],complaints=[];
     try{
-      const rr=await fetch('https://api.nhtsa.gov/recalls/recallsByVehicle?make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model)+'&modelYear='+cv.year);
-      const rd=await rr.json();const recalls=rd.results||[];
-      if(recalls.length){rh='<div class="sh"><span class="sh-t">Open Recalls ('+recalls.length+')</span><span class="sh-l"></span></div>'+recalls.slice(0,5).map(r=>{const s=(r.Consequence||'').toLowerCase(),c=s.includes('fire')||s.includes('crash')||s.includes('injury')?'':s.includes('control')||s.includes('stall')?'mod':'low';return'<div class="rc '+c+'"><div class="cp">'+(r.Component||'Unknown')+'</div><div class="dt">'+((r.Summary||'').substring(0,150))+'...</div></div>';}).join('');}
-      else rh='<p style="color:var(--grn);font-size:12px;margin:8px 0">&#10003; No open recalls found</p>';
-    }catch(e){}
-    try{
-      const cr=await fetch('https://api.nhtsa.gov/complaints/complaintsByVehicle?make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model)+'&modelYear='+cv.year);
-      const cd2=await cr.json();const comps=cd2.results||[];
-      if(comps.length){const cats={};comps.forEach(c=>{const cp=c.components||'Unknown';cats[cp]=(cats[cp]||0)+1;});const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5),mxx=sorted[0][1];ch='<div class="sh" style="margin-top:14px"><span class="sh-t">Complaints ('+comps.length+')</span><span class="sh-l"></span></div>'+sorted.map(([cat,cnt])=>'<div class="cb"><span class="ct">'+cat+'</span><div class="tr"><div style="height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:2px;width:'+(cnt/mxx*100)+'%"></div></div><span class="cn">'+cnt+'</span></div>').join('');}
+      const [rr,cr]=await Promise.all([
+        fetch('https://api.nhtsa.gov/recalls/recallsByVehicle?make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model)+'&modelYear='+cv.year),
+        fetch('https://api.nhtsa.gov/complaints/complaintsByVehicle?make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model)+'&modelYear='+cv.year)
+      ]);
+      const rd=await rr.json(); recalls=rd.results||[];
+      const cd2=await cr.json(); complaints=cd2.results||[];
     }catch(e){}
 
-    const ml2=(cv.make||'').toLowerCase().replace(/\s+/g,'-');
-    const mdl2=(cv.model||'').toLowerCase().replace(/\s+/g,'-');
-    const vinPrompt='VIN: '+vin+', '+(miles||'unknown')+' miles, ZIP '+zip+', Las Vegas Turo fleet. Run full 16-section SKILL analysis including entrance strategy, KBB value, depreciation chart, Turo market data, ROI calculator, exit strategy.';
+    // ── Turo LV market by segment ──
+    const TD={sport:{daily:[150,450],trips:10,occ:52,comp:'Sport/exotic segment. Strong event-weekend demand. Verify comps at Turo.'},luxury:{daily:[95,220],trips:12,occ:58,comp:'Competitive luxury segment. Strong convention + business demand.'},truck:{daily:[75,145],trips:11,occ:62,comp:'Pickups/SUVs hold steady. Construction, airport, tourist traffic.'},economy:{daily:[38,75],trips:14,occ:68,comp:'Volume-driven segment. Most competitive. Need strong listing.'}}[seg];
+    const dailyMid=Math.round((TD.daily[0]+TD.daily[1])/2);
+    const insurEst=Math.round(askPrice*0.012/12);
+    const maintEst=isSport||isLux?420:isTruck?280:200;
+    const grossMonth=Math.round(dailyMid*TD.trips*2.5*(TD.occ/100));
+    const netMonth=Math.round(grossMonth*0.75);
+    const profitMonth=netMonth-insurEst-maintEst;
+    const monthsBE=profitMonth>0?Math.ceil(askPrice/profitMonth):999;
 
-    document.getElementById('vin-res').innerHTML=
-      '<div class="ph"><div class="ph-e">Quick Price Estimate</div><div class="ph-t">'+fmt$(tgt)+'</div><div class="ph-ts"><div class="ph-ti"><div class="tl">Maximum</div><div class="tv mx">'+fmt$(mx)+'</div></div><div class="ph-ti"><div class="tl">Walk Away</div><div class="tv wk">'+fmt$(wk)+'</div></div></div><div style="font-size:10px;color:var(--tx3);margin-top:8px">Quick estimate only &mdash; use Full Claude Report for accurate KBB pricing</div></div>'
-      +'<div class="g2" style="margin-top:13px"><div><div class="sh"><span class="sh-t">Vehicle Details</span><span class="sh-l"></span></div><div class="cd"><div class="cd-h"><span class="cd-t">'+cv.year+' '+cv.make+' '+cv.model+'</span><span class="badge b-r">'+(cv.trim||cv.body||'')+'</span></div>'+rows.map(([l,val])=>'<div class="cd-r"><span class="l">'+l+'</span><span class="v">'+val+'</span></div>').join('')+'</div></div>'
-      +'<div>'+rh+ch+'</div></div>'
-      +'<div class="sh" style="margin-top:14px"><span class="sh-t">Turo ROI Estimate (Las Vegas)</span><span class="sh-l"></span></div>'
-      +'<div class="metric-grid"><div class="metric-box"><div class="metric-val" style="color:var(--acc2)">'+fmt$(dailyRate)+'</div><div class="metric-lbl">Est. Daily Rate</div></div><div class="metric-box"><div class="metric-val" style="color:var(--grn)">'+fmt$(netMonth)+'</div><div class="metric-lbl">Est. Net/Month</div></div><div class="metric-box"><div class="metric-val" style="color:var(--amb)">'+monthsBreakeven+'mo</div><div class="metric-lbl">Break-Even</div></div><div class="metric-box"><div class="metric-val">'+(monthsBreakeven<=24?'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--grn)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>':'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--amb)" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>')+'</div><div class="metric-lbl">'+(monthsBreakeven<=24?'Good ROI':'Marginal ROI')+'</div></div></div>'
-      +'<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span></div>'
-      +'<div class="rg"><a class="rl" href="https://www.kbb.com/'+ml2+'/'+mdl2+'/'+cv.year+'/" target="_blank">KBB</a><a class="rl" href="https://www.edmunds.com/'+ml2+'/'+mdl2+'/'+cv.year+'/appraisal-value/" target="_blank">Edmunds</a><a class="rl" href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin='+vin+'" target="_blank">Carfax</a><a class="rl" href="https://www.nicb.org/vincheck?vin='+vin+'" target="_blank">NICB</a><a class="rl" href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank">NHTSA</a><a class="rl" href="https://turo.com/us/en/search?defaultZipCode=89014&location=Las+Vegas" target="_blank">Turo LV</a></div>'
-      +'<div style="display:flex;gap:8px;margin-top:13px;flex-wrap:wrap">'
-      +'<button class="btn btn-g" onclick="window.open(\'https://claude.ai/new?q=\'+encodeURIComponent(\''+vinPrompt+'\'),\'_blank\');toast(\'Opening Claude AI for full analysis...\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>Full 16-Section Report</button>'
-      +'<button class="btn btn-o" onclick="navigator.clipboard.writeText(\''+vinPrompt+'\');toast(\'Prompt copied! Paste into Claude AI\')">Copy Prompt</button>'
-      +(canEdit()?'<button class="btn btn-o" onclick="addFromVIN()">+ Add to Fleet</button>':'')
-      +'</div>';
+    // ── Damage Risk ──
+    const RF={type:isSport?8.5:isLux?5.5:isTruck?4.0:3.0,hp:cv.hp>400?8.5:cv.hp>300?7.0:cv.hp>200?5.0:3.5,market:7.0,value:adjVal>50000?7.5:adjVal>30000?5.5:4.0,drive:(cv.drive||'').includes('Rear')?8.0:(cv.drive||'').toUpperCase().includes('AWD')||(cv.drive||'').includes('All')?5.0:(cv.drive||'').includes('4')?6.0:3.5};
+    const riskScore=Math.round((RF.type*.30+RF.hp*.20+RF.market*.20+RF.value*.15+RF.drive*.15)*10)/10;
+    const riskLabel=riskScore>=7?'HIGH':riskScore>=5?'MODERATE':'LOW';
+    const riskColor=riskScore>=7?'var(--red)':riskScore>=5?'var(--amb)':'var(--grn)';
 
+    // ── Protection Plan ──
+    const recPlan=adjVal>40000?'premier':adjVal>22000?'standard':'basic';
+
+    // ── ROI Scenarios ──
+    const scenarios=[{label:'Conservative',trips:6,days:2.0,col:'var(--tx2)'},{label:'Moderate',trips:9,days:2.5,col:'var(--acc2)'},{label:'Optimistic',trips:13,days:3.0,col:'var(--grn)'}].map(s=>{
+      const gross=Math.round(dailyMid*s.trips*s.days);
+      const net=Math.round(gross*0.75);
+      const profit=net-insurEst-maintEst;
+      return{...s,gross,net,profit,be:profit>0?Math.ceil(askPrice/profit):999};
+    });
+
+    // ── Mileage Burn ──
+    const turoMiYear=TD.trips*12*150;
+    const totalMiYear=turoMiYear+3000;
+    const startMi=actMiles;
+    const miBurn=mo=>startMi+(totalMiYear/12*mo);
+    const moTo=mi=>mi>startMi?Math.round((mi-startMi)/totalMiYear*12):0;
+    const mi30=moTo(30000),mi60=moTo(60000),mi100=moTo(100000);
+    const miLifePct=Math.round(startMi/(age*13000||13000)*100);
+
+    // ── Tax ──
+    const gvwrN=parseInt((cv.gvwr||'').replace(/\D/g,''))||0;
+    const s179Elig=gvwrN>6000||(!gvwrN&&(isTruck||(cv.body||'').toLowerCase().includes('van')));
+    const s179Max=s179Elig?Math.min(askPrice,gvwrN>14000?1160000:28900):0;
+    const s179Save=Math.round(s179Max*0.32);
+    const mileDeduct=Math.round(turoMiYear*0.67);
+    const effCost=askPrice-s179Save;
+
+    // ── Exit Strategy ──
+    const exitYrs=mi100>0?Math.round(mi100/12):Math.round((150000-startMi)/totalMiYear);
+    let exitVal=adjVal;
+    for(let i=0;i<Math.min(exitYrs,DEP_Y.length);i++) exitVal*=(1-(DEP_Y[Math.min(age+i,DEP_Y.length-1)]||0.06));
+    exitVal=Math.round(exitVal);
+    const totalRev=scenarios[1].profit*12*exitYrs;
+    const lifePL=totalRev+exitVal-askPrice;
+
+    // ── Depreciation Curve Data ──
+    const chartYrs=Array.from({length:12},(_,i)=>i);
+    const chartVals=chartYrs.map(y=>{let v2=msrpEst;for(let i=0;i<Math.min(y,DEP_Y.length);i++)v2*=(1-DEP_Y[i]);return Math.round(v2);});
+    const swS=isSport?2:isLux?2:3,swE=isSport?5:isLux?5:6;
+
+    // ── Talking Points ──
+    const talkPts=[];
+    if(recalls.length) talkPts.push(recalls.length+' open recall'+(recalls.length>1?'s':'')+' on file — negotiate $'+Math.round(recalls.length*500)+'–$'+Math.round(recalls.length*900)+' off for repair cost');
+    if(actMiles>expMiles*1.2) talkPts.push('Above-average mileage ('+(Math.round((actMiles-expMiles)/1000))+'k over expected) — supports asking below market');
+    if(askPrice>adjVal*1.05) talkPts.push('Asking price is '+Math.round((askPrice/adjVal-1)*100)+'% above estimate — use KBB/Edmunds link as leverage');
+    if(!talkPts.length) talkPts.push('Vehicle appears fairly priced — focus on condition and history discounts');
+    talkPts.push('Show competing listings on CarGurus/Carvana to anchor price lower');
+    talkPts.push('Last Saturday of the month: dealers have quota pressure — best negotiating window');
+
+    // ── Surge Calendar ──
+    const SURGE_M=[0,1.8,1.3,1.3,1.1,1.5,1.2,1.2,1.1,1.1,1.3,1.7,1.6];
+    const surgeCal=[['Jan','CES','+100-150%'],['Feb','Super Bowl Wknd','+50-75%'],['Mar','March Madness','+50-75%'],['Apr','Spring Break','+25-40%'],['May','Memorial Day / EDC','+75-100%'],['Jun','EDC / Summer','+40-60%'],['Jul','Independence Day','+40-60%'],['Aug','Summer Peak','+20-35%'],['Sep','Labor Day','+30-50%'],['Oct','Halloween / F1','+75-125%'],['Nov','F1 Grand Prix','+150-200%'],['Dec','NFR / NYE','+100-150%']];
+
+    // ── URL parts ──
+    const ml=(cv.make).toLowerCase().replace(/[\s-]+/g,'-');
+    const mdl=(cv.model).toLowerCase().replace(/[\s-]+/g,'-');
+    const vName=cv.year+' '+cv.make+' '+cv.model+(cv.trim?' '+cv.trim:'');
+
+    // ── Vehicle rows ──
+    const vRows=[['Year',cv.year],['Make',cv.make],['Model',cv.model]];
+    if(cv.trim)vRows.push(['Trim',cv.trim]);
+    if(cv.body)vRows.push(['Body',cv.body]);
+    const engStr=(cv.engine?cv.engine+' ':'')+( cv.cyl?cv.cyl+'-cyl ':'')+( cv.hp?cv.hp+' HP':'');
+    if(engStr.trim())vRows.push(['Engine',engStr.trim()]);
+    if(cv.drive)vRows.push(['Drive',cv.drive]);
+    if(cv.fuel)vRows.push(['Fuel',cv.fuel]);
+    if(cv.trans)vRows.push(['Trans',cv.trans]);
+    if(miles)vRows.push(['Mileage',Number(miles).toLocaleString()+' mi']);
+    if(cv.gvwr)vRows.push(['GVWR',cv.gvwr]);
+    if(cv.plant)vRows.push(['Plant',cv.plant]);
+    vRows.push(['VIN',vin]);
+
+    // ── Recall HTML ──
+    let rh='';
+    if(recalls.length){
+      rh='<div class="sh" style="margin-top:14px"><span class="sh-t" style="color:var(--red)">'+recalls.length+' Open Recall'+(recalls.length>1?'s':'')+'</span><span class="sh-l"></span></div>';
+      rh+=recalls.slice(0,5).map(r=>{const s=(r.Consequence||'').toLowerCase();const c=s.includes('fire')||s.includes('crash')||s.includes('injur')?'':s.includes('control')||s.includes('stall')?'mod':'low';return'<div class="rc '+c+'"><div class="cp">'+(r.Component||'Unknown')+'</div><div class="dt">'+((r.Summary||'').substring(0,160))+'</div></div>';}).join('');
+      if(recalls.length>5)rh+='<div style="font-size:10px;color:var(--tx3);padding:4px 2px">+' +(recalls.length-5)+' more recalls — <a href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank" style="color:var(--acc2)">view all on NHTSA</a></div>';
+    }else{rh='<div style="color:var(--grn);font-size:12px;margin-top:10px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>No open recalls found</div>';}
+
+    // ── Complaints HTML ──
+    let ch='';
+    if(complaints.length){
+      const cats={};complaints.forEach(c=>{const cp=c.components||'Unknown';cats[cp]=(cats[cp]||0)+1;});
+      const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);const mxc=sorted[0][1];
+      ch='<div class="sh" style="margin-top:14px"><span class="sh-t">'+complaints.length+' Complaints</span><span class="sh-l"></span></div>';
+      ch+=sorted.map(([cat,cnt])=>'<div class="cb"><span class="ct">'+cat+'</span><div class="tr"><div style="height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:2px;width:'+(cnt/mxc*100)+'%"></div></div><span class="cn">'+cnt+'</span></div>').join('');
+    }
+
+    // ── Section label helper ──
+    const SH=(n,t,col)=>'<div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font-family:\'Rajdhani\',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--tx3)">'+n+'</span><div style="font-family:\'Rajdhani\',sans-serif;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:'+(col||'var(--tx2)')+'">'+t+'</div><div style="flex:1;height:1px;background:var(--bd);margin-left:8px"></div></div>';
+    const ROW=(l,v,vc)=>'<div class="cd-r"><span class="l">'+l+'</span><span class="v"'+(vc?' style="color:'+vc+'"':'')+'>'+v+'</span></div>';
+
+    let H='';
+
+    // ── 01 NEGOTIATION CARD ──
+    H+='<div style="margin-bottom:20px">'+SH('01','Negotiation Card');
+    H+='<div class="ph" style="text-align:left"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div class="ph-e">Fleet Purchase Analysis &bull; Las Vegas Turo</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:19px;font-weight:700;color:var(--tx);margin:3px 0">'+vName+'</div><div style="font-size:11px;color:var(--tx3)">'+Number(miles||0).toLocaleString()+' mi &bull; ZIP '+zip+' &bull; '+segLabel+'</div></div><div style="text-align:right;padding-left:12px"><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Damage Risk</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:32px;font-weight:700;color:'+riskColor+';line-height:1">'+riskScore+'<span style="font-size:13px">/10</span></div><div style="font-size:9px;font-weight:700;color:'+riskColor+'">'+riskLabel+'</div></div></div>';
+    H+='<div class="ph-ts" style="justify-content:flex-start;gap:20px;margin-bottom:14px"><div class="ph-ti"><div class="tl">Target Price</div><div class="tv" style="color:var(--grn)">'+fmt$(tgt)+'</div></div><div class="ph-ti"><div class="tl">Maximum</div><div class="tv mx">'+fmt$(mx)+'</div></div><div class="ph-ti"><div class="tl">Walk Away</div><div class="tv wk">'+fmt$(wk)+'</div></div>'+(pp?'<div class="ph-ti"><div class="tl">Asking Price</div><div class="tv" style="color:'+(askPrice<=mx?'var(--tx2)':'var(--red)')+'">'+fmt$(askPrice)+'</div><div style="font-size:9px;color:'+(askPrice<=tgt?'var(--grn)':askPrice<=mx?'var(--tx3)':'var(--red)')+'">'+( askPrice<=tgt?'Below target':askPrice<=mx?'Acceptable':'Overpriced')+'</div></div>':'')+'</div>';
+    H+='<div style="border-top:1px solid var(--bd);padding-top:11px"><div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;color:var(--tx3);margin-bottom:7px">TALKING POINTS</div>';
+    H+=talkPts.map(t=>'<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:5px;font-size:11px;color:var(--tx2);line-height:1.4"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="3" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><polyline points="9 18 15 12 9 6"/></svg>'+t+'</div>').join('');
+    H+='</div></div></div>';
+
+    // ── 02 + 04 side by side ──
+    H+='<div class="g2" style="margin-bottom:14px"><div>'+SH('02','Vehicle Details');
+    H+='<div class="cd">'+vRows.map(([l,val])=>ROW(l,val)).join('')+'</div></div>';
+    H+='<div>'+SH('04','Recall &amp; History Flags');
+    H+='<div class="cd">'+rh+ch+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);font-size:10px;color:var(--tx3)">Verify: <a href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin='+vin+'" target="_blank" style="color:var(--acc2)">Carfax</a> &bull; <a href="https://www.nicb.org/vincheck?vin='+vin+'" target="_blank" style="color:var(--acc2)">NICB</a> &bull; <a href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank" style="color:var(--acc2)">NHTSA</a></div></div></div></div>';
+
+    // ── 03 VALUATION ──
+    H+='<div style="margin-bottom:14px">'+SH('03','Valuation');
+    H+='<div class="cd"><div class="g3" style="margin-bottom:12px">';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Est. Original MSRP</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--tx2)">'+fmt$(msrpEst)+'</div></div>';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Depreciated (Age)</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">'+fmt$(curVal)+'</div><div style="font-size:10px;color:var(--tx3)">'+depPct+'% lost from MSRP</div></div>';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Mileage-Adjusted</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--grn)">'+fmt$(adjVal)+'</div><div style="font-size:10px;color:'+(miAdj>0?'var(--grn)':miAdj<0?'var(--red)':'var(--tx3)')+'">'+( miAdj>0?'+'+(miAdj*100).toFixed(0)+'% low-mile premium':miAdj<0?(miAdj*100).toFixed(0)+'% high-mile discount':'At avg mileage')+'</div></div>';
+    H+='</div><div style="margin-bottom:8px;font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3)">CONDITION RANGE (KBB EQUIVALENT)</div><div class="g4">';
+    ['Rough','Fair','Good','Excellent'].forEach((cond,ci)=>{const cv2=Math.round(adjVal*[0.78,0.87,1.00,1.12][ci]);H+='<div style="text-align:center;padding:8px;background:var(--sf);border-radius:var(--rs);border:1px solid '+(cond==='Good'?'var(--acc2)':'var(--bd)')+'"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px">'+cond+'</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:15px;font-weight:700;color:'+(cond==='Good'?'var(--acc2)':'var(--tx)')+'">'+fmt$(cv2)+'</div></div>';});
+    H+='</div><div style="margin-top:8px;font-size:10px;color:var(--tx3)">Estimates based on segment depreciation model. Always verify: <a href="https://www.kbb.com/'+ml+'/'+mdl+'/'+cv.year+'/" target="_blank" style="color:var(--acc2)">KBB</a> &bull; <a href="https://www.edmunds.com/'+ml+'/'+mdl+'/'+cv.year+'/appraisal-value/" target="_blank" style="color:var(--acc2)">Edmunds</a></div>';
+    H+='</div></div>';
+
+    // ── 05 TURO MARKET DATA ──
+    H+='<div style="margin-bottom:14px">'+SH('05','Turo Market Data — Las Vegas');
+    H+='<div class="cd"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--acc2)">$'+TD.daily[0]+'–$'+TD.daily[1]+'</div><div class="metric-lbl">Daily Rate Range</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--grn)">'+TD.occ+'%</div><div class="metric-lbl">Est. Occupancy</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--amb)">'+TD.trips+'/mo</div><div class="metric-lbl">Est. Trips/Mo</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx)">'+fmt$(netMonth)+'</div><div class="metric-lbl">Est. Net/Month</div></div>';
+    H+='</div><div style="font-size:11px;color:var(--tx2);margin-bottom:10px">'+TD.comp+'</div>';
+    H+='<a href="https://turo.com/us/en/search?defaultZipCode='+zip+'&location=Las+Vegas&startDate=2026-04-22&endDate=2026-04-24" target="_blank" class="btn btn-s btn-o" style="text-decoration:none;display:inline-flex">View Live Turo Market</a>';
+    H+='</div></div>';
+
+    // ── 06 PRICING STRATEGY ──
+    H+='<div style="margin-bottom:14px">'+SH('06','Turo Pricing Strategy');
+    const recList=Math.round(dailyMid*(D.fleet().length<2?0.88:0.95));
+    H+='<div class="cd"><div class="g3" style="margin-bottom:14px">';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Rec. Listing Price</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--acc2)">'+fmt$(recList)+'</div><div style="font-size:10px;color:var(--tx3)">per day</div></div>';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Weekday Rate</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--tx)">'+fmt$(recList)+'</div></div>';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Weekend Rate</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--grn)">'+fmt$(Math.round(recList*1.20))+'</div></div>';
+    H+='</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">LAS VEGAS SURGE CALENDAR</div>';
+    H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">';
+    surgeCal.forEach(([mo,ev,mult],mi)=>{H+='<div style="padding:7px 9px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><span style="font-family:\'Rajdhani\',sans-serif;font-size:12px;font-weight:700;color:var(--acc2)">'+mo+'</span><span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;color:var(--grn)">'+fmt$(Math.round(recList*SURGE_M[mi+1]))+'</span></div><div style="font-size:9px;color:var(--tx2)">'+ev+'</div><div style="font-size:9px;color:var(--amb)">'+mult+'</div></div>';});
+    H+='</div><div style="margin-top:10px;font-size:10px;color:var(--tx3)">Start 10–15% below market while building reviews. Raise after 10+ trips. Recommended: '+(adjVal>30000?'2':'1')+'-day minimum trip to reduce wear-per-booking.</div>';
+    H+='</div></div>';
+
+    // ── 07 PROTECTION PLAN ──
+    H+='<div style="margin-bottom:14px">'+SH('07','Protection Plan Optimizer');
+    H+='<div class="cd"><div class="g3">';
+    [{id:'basic',cover:60,max:50000,daily:0,liab:40},{id:'standard',cover:70,max:125000,daily:2.5,liab:30},{id:'premier',cover:85,max:125000,daily:5,liab:15}].forEach(p=>{
+      const isR=p.id===recPlan;
+      H+='<div style="padding:12px;background:var(--sf);border-radius:var(--rs);border:1px solid '+(isR?'rgba(181,136,99,.6)':'var(--bd)')+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;color:var(--tx)">'+(p.id.charAt(0).toUpperCase()+p.id.slice(1))+'</div>'+(isR?'<span class="rb rb-owner" style="font-size:9px">Rec.</span>':'')+'</div>';
+      H+=ROW('Coverage',p.cover+'%')+ROW('Max Payout',fmt$(p.max))+ROW('Daily Cost',p.daily>0?'+$'+p.daily:'Included')+ROW('Host Liability',p.liab+'%');
+      H+='</div>';
+    });
+    H+='</div></div></div>';
+
+    // ── 08 DAMAGE RISK ──
+    H+='<div style="margin-bottom:14px">'+SH('08','Damage Risk Score');
+    H+='<div class="cd"><div style="display:flex;align-items:center;gap:20px;margin-bottom:12px">';
+    H+='<div style="text-align:center;min-width:80px"><div style="font-family:\'Rajdhani\',sans-serif;font-size:52px;font-weight:700;color:'+riskColor+';line-height:1">'+riskScore+'</div><div style="font-size:10px;font-weight:700;color:'+riskColor+';letter-spacing:1px">'+riskLabel+' RISK</div></div>';
+    H+='<div style="flex:1">';
+    [['Vehicle Type',RF.type,30],['Horsepower',RF.hp,20],['LV Market',RF.market,20],['Vehicle Value',RF.value,15],['Drivetrain',RF.drive,15]].forEach(([label,score,wt])=>{H+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-bottom:2px"><span>'+label+'</span><span>'+score.toFixed(1)+'/10 &times; '+wt+'%</span></div><div style="height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+(score*10)+'%;background:'+(score>=7?'var(--red)':score>=5?'var(--amb)':'var(--grn)')+';border-radius:2px;transition:width .4s"></div></div></div>';});
+    H+='</div></div>';
+    H+='<div style="font-size:11px;color:var(--tx2)">'+(riskScore>=7?'High-risk vehicle. Use Premier protection, set strict mileage limits, consider extra deposit. Expect 2–3 claims/year statistically.':riskScore>=5?'Moderate risk. Standard protection recommended. Monitor reviews and mileage closely.':'Lower-risk vehicle. Good fleet candidate. Basic or Standard protection may suffice.')+'</div>';
+    H+='</div></div>';
+
+    // ── 09 ROI CALCULATOR ──
+    H+='<div style="margin-bottom:14px">'+SH('09','Fleet ROI Calculator');
+    H+='<div class="cd"><div class="g3" style="margin-bottom:16px">';
+    scenarios.forEach(s=>{
+      H+='<div style="padding:10px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)">';
+      H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:13px;font-weight:700;color:'+s.col+';margin-bottom:8px">'+s.label+'</div>';
+      H+=ROW('Trips/Month',''+s.trips)+ROW('Avg Days',''+s.days)+ROW('Gross Revenue',fmt$(s.gross))+ROW('After Turo 25%',fmt$(s.net))+ROW('Insurance','\u2013'+fmt$(insurEst))+ROW('Maintenance','\u2013'+fmt$(maintEst));
+      H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Net Profit/Mo',fmt$(s.profit),(s.profit>0?'var(--grn)':'var(--red)'))+'</div>';
+      H+='<div style="margin-top:5px;font-size:10px;color:var(--tx3)">Break-even: '+(s.be<999?s.be+' months':'N/A')+'</div></div>';
+    });
+    H+='</div>';
+    // 12-month projection
+    H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">12-MONTH P&amp;L PROJECTION (MODERATE + SURGE)</div>';
+    H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+    H+='<thead><tr style="border-bottom:1px solid var(--bd)">';
+    ['Mo','Event','Gross','Net','Profit','Cumulative'].forEach(hdr=>{H+='<th style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:600;color:var(--tx3)">'+hdr+'</th>';});
+    H+='</tr></thead><tbody>';
+    let cumProfit=0;
+    for(let m=1;m<=12;m++){
+      const sf=SURGE_M[m]||1.0;
+      const mG=Math.round(scenarios[1].gross*sf);
+      const mN=Math.round(mG*0.75);
+      const mP=mN-insurEst-maintEst;
+      cumProfit+=mP;
+      const [mo,ev]=surgeCal[m-1];
+      H+='<tr style="border-bottom:1px solid rgba(211,195,185,.04)'+(sf>1.4?';background:rgba(181,136,99,.04)':'')+'"><td style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-weight:600;color:var(--acc2)">'+mo+'</td><td style="padding:5px 8px;text-align:right;font-size:10px;color:var(--tx3)">'+ev+'</td><td style="padding:5px 8px;text-align:right;color:var(--tx2)">'+fmt$(mG)+'</td><td style="padding:5px 8px;text-align:right;color:var(--acc2)">'+fmt$(mN)+'</td><td style="padding:5px 8px;text-align:right;color:'+(mP>0?'var(--grn)':'var(--red)')+'">'+fmt$(mP)+'</td><td style="padding:5px 8px;text-align:right;color:var(--tx)">'+fmt$(cumProfit)+'</td></tr>';
+    }
+    H+='</tbody></table></div></div></div>';
+
+    // ── 10 MILEAGE BURN ──
+    H+='<div style="margin-bottom:14px">'+SH('10','Mileage Burn Rate');
+    H+='<div class="cd"><div class="g4" style="margin-bottom:12px">';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--acc2)">'+Number(turoMiYear).toLocaleString()+'</div><div class="metric-lbl">Turo Mi/Year</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx2)">'+Number(totalMiYear).toLocaleString()+'</div><div class="metric-lbl">Total Mi/Year</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--amb)">'+miLifePct+'%</div><div class="metric-lbl">Life Used</div></div>';
+    H+='<div class="metric-box"><div class="metric-val" style="color:var(--grn)">'+(mi100>0?mi100+' mo':'Past 100k')+'</div><div class="metric-lbl">Hits 100k</div></div>';
+    H+='</div><div class="g3">';
+    [{label:'30k',mo:mi30,val:30000},{label:'60k',mo:mi60,val:60000},{label:'100k',mo:mi100,val:100000}].forEach(ms=>{
+      const past=startMi>=ms.val;
+      H+='<div style="padding:9px;background:var(--sf);border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:4px">'+ms.label+' Mile Service</div>';
+      H+=past?'<div style="font-size:11px;color:var(--tx3)">Already past</div>':'<div style="font-family:\'Rajdhani\',sans-serif;font-size:16px;font-weight:700;color:var(--tx)">'+ms.mo+' mo</div><div style="font-size:10px;color:var(--tx3)">'+Math.round(ms.mo/12*10)/10+' yrs away</div>';
+      H+='</div>';
+    });
+    H+='</div><div style="margin-top:10px;font-size:10px;color:var(--tx3)">Based on '+TD.trips+' trips/mo &times; ~150 mi avg trip + 3,000 personal mi/yr. Plan major services and tire rotations proactively.</div></div></div>';
+
+    // ── 11 TAX BENEFITS ──
+    H+='<div style="margin-bottom:14px">'+SH('11','Tax Benefit Estimator');
+    H+='<div class="cd"><div class="g3" style="margin-bottom:10px">';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Section 179 Deduction</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:'+(s179Elig?'var(--grn)':'var(--tx3)')+'">'+( s179Elig?fmt$(s179Max):'Not Eligible')+'</div><div style="font-size:9px;color:var(--tx3)">'+(s179Elig?'GVWR > 6,000 lbs':'GVWR \u2264 6,000 lbs')+'</div></div>';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Tax Saving (32%)</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">'+( s179Elig?fmt$(s179Save):'\u2014')+'</div></div>';
+    H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Mileage Deduction/Yr</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">'+fmt$(mileDeduct)+'</div><div style="font-size:9px;color:var(--tx3)">'+Number(turoMiYear).toLocaleString()+' mi \u00d7 $0.67</div></div>';
+    H+='</div>';
+    H+=ROW('Asking Price',fmt$(askPrice))+( s179Elig?ROW('Section 179 Saving','\u2013'+fmt$(s179Save),'var(--grn)'):'');
+    H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Effective Net Cost',fmt$(effCost),'var(--acc2)')+'</div>';
+    H+='<div style="margin-top:8px;font-size:10px;color:var(--tx3)">Consult a CPA. Section 179 requires &gt;50% business use. Mileage deduction is an alternative to actual expenses &mdash; use whichever is larger.</div>';
+    H+='</div></div>';
+
+    // ── 12 BEST PRICE TO BUY ──
+    H+='<div style="margin-bottom:14px">'+SH('12','Best Price to Buy');
+    H+='<div class="cd"><div class="ph-ts" style="justify-content:flex-start;gap:24px;margin-bottom:14px"><div class="ph-ti"><div class="tl">Target Price</div><div class="tv" style="color:var(--grn)">'+fmt$(tgt)+'</div><div style="font-size:9px;color:var(--tx3)">Push hard for this</div></div><div class="ph-ti"><div class="tl">Maximum Pay</div><div class="tv mx">'+fmt$(mx)+'</div><div style="font-size:9px;color:var(--tx3)">Acceptable deal</div></div><div class="ph-ti"><div class="tl">Walk Away If ></div><div class="tv wk">'+fmt$(wk)+'</div><div style="font-size:9px;color:var(--tx3)">Skip it above this</div></div>'+(pp?'<div class="ph-ti"><div class="tl">Asking Price</div><div class="tv" style="color:'+(askPrice<=mx?'var(--tx2)':'var(--red)')+'">'+fmt$(askPrice)+'</div><div style="font-size:9px;color:'+(askPrice<=tgt?'var(--grn)':askPrice<=mx?'var(--tx3)':'var(--red)')+'">'+( askPrice<=tgt?'Deal':askPrice<=mx?'Negotiate down':'Too high')+'</div></div>':'')+'</div>';
+    H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">NEGOTIATING TIPS FOR '+cv.make+' '+cv.model+'</div>';
+    const tips=[];
+    if(recalls.length)tips.push('Use '+recalls.length+' open recall'+(recalls.length>1?'s':'')+' as negotiating leverage — deduct $'+Math.round(recalls.length*600)+' for repair/inconvenience');
+    if(isSport||isLux)tips.push('Inspect for track use, aftermarket modifications, or deferred premium maintenance');
+    if((cv.drive||'').includes('Rear'))tips.push('RWD in Vegas = higher damage risk — use this to justify a discount');
+    if(isTruck)tips.push('Check towing/payload wear: hitch pins, bed liner, frame, suspension');
+    tips.push('Get pre-purchase inspection ($150–200) — the report becomes leverage');
+    tips.push('Show CarGurus: "I\'m seeing comparable '+cv.year+' '+cv.make+' '+cv.model+'s at $X on CarGurus"');
+    H+=tips.map(t=>'<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:5px;font-size:11px;color:var(--tx2);line-height:1.4"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="3" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><polyline points="9 18 15 12 9 6"/></svg>'+t+'</div>').join('');
+    H+='</div></div>';
+
+    // ── 13 BEST AGE TO BUY ──
+    H+='<div style="margin-bottom:14px">'+SH('13','Best Age to Buy \u2014 Depreciation Curve');
+    H+='<div class="cd"><canvas id="dep-chart" style="max-height:220px;margin-bottom:14px"></canvas>';
+    H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="border-bottom:1px solid var(--bd)">';
+    ['Age','Est. Value','Annual Loss','% of MSRP','Note'].forEach(hdr=>{H+='<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:600;font-family:\'Rajdhani\',sans-serif;color:var(--tx3)">'+hdr+'</th>';});
+    H+='</tr></thead><tbody>';
+    chartYrs.forEach((y,yi)=>{
+      const val=chartVals[yi];const pct=Math.round(val/msrpEst*100);const lost=yi>0?chartVals[yi-1]-val:0;
+      const isSweet=y>=swS&&y<=swE;const isCur=y===age;
+      H+='<tr style="border-bottom:1px solid rgba(211,195,185,.04);'+(isSweet?'background:rgba(109,186,125,.04)':'')+(isCur?'background:rgba(181,136,99,.06)':'')+'"><td style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-weight:600;color:'+(isCur?'var(--acc2)':'var(--tx)')+'">'+y+'yr'+(isCur?' \u2190 THIS':'')+'</td><td style="padding:5px 8px;text-align:right">'+fmt$(val)+'</td><td style="padding:5px 8px;text-align:right;color:var(--red)">'+(yi>0?'\u2013'+fmt$(lost):'\u2014')+'</td><td style="padding:5px 8px;text-align:right;color:'+(pct>70?'var(--grn)':pct>50?'var(--tx2)':'var(--tx3)')+'">'+pct+'%</td><td style="padding:5px 8px;text-align:right;font-size:10px;color:var(--tx3)">'+(isSweet?'\u2713 Sweet spot':'')+(y===0?'New price':y===1?'Steepest drop':y>=8?'Slow loss':'')+'</td></tr>';
+    });
+    H+='</tbody></table></div>';
+    H+='<div style="margin-top:10px;font-size:11px;color:var(--tx2)">Optimal buy window for '+segLabel+': <strong style="color:var(--acc2)">'+swS+'–'+swE+' years old</strong> (~'+Math.round((1-chartVals[swS]/msrpEst)*100)+'% depreciation already absorbed). '+(age>=swS&&age<=swE?'<strong style="color:var(--grn)">This vehicle is in the sweet spot.</strong>':age<swS?'This vehicle is newer than ideal — more depreciation ahead.':'Older than sweet spot — value is lower but reliability planning becomes critical.')+'</div>';
+    H+='</div></div>';
+
+    // ── 14 EXIT STRATEGY ──
+    H+='<div style="margin-bottom:14px">'+SH('14','Exit Strategy &amp; Resale Timing');
+    H+='<div class="cd"><div class="g3" style="margin-bottom:12px">';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Sell Before</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">100k mi</div><div style="font-size:10px;color:var(--tx3)">'+(mi100>0?'~'+mi100+' months away':'Already past')+'</div></div>';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Projected Resale</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--grn)">'+fmt$(exitVal)+'</div></div>';
+    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Lifetime P&amp;L</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:'+(lifePL>0?'var(--grn)':'var(--red)')+'">'+fmt$(lifePL)+'</div></div>';
+    H+='</div>';
+    H+=ROW('Purchase Price',fmt$(askPrice))+ROW('Total Revenue ('+exitYrs+'yr moderate)','+'+fmt$(totalRev),'var(--grn)')+ROW('Projected Resale','+'+fmt$(exitVal),'var(--grn)');
+    H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Net Fleet P&L',fmt$(lifePL),(lifePL>0?'var(--grn)':'var(--red)'))+'</div>';
+    H+='<div style="margin-top:10px;font-size:10px;color:var(--tx3)">Exit before 100k for best resale position. After 100k, value drops faster than incremental Turo revenue compensates. Clean Carfax + documented services = top-of-range resale.</div>';
+    H+='</div></div>';
+
+    // ── RESEARCH LINKS + ACTIONS ──
+    H+='<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span></div>';
+    H+='<div class="rg" style="margin-bottom:14px"><a class="rl" href="https://www.kbb.com/'+ml+'/'+mdl+'/'+cv.year+'/" target="_blank">KBB</a><a class="rl" href="https://www.edmunds.com/'+ml+'/'+mdl+'/'+cv.year+'/appraisal-value/" target="_blank">Edmunds</a><a class="rl" href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin='+vin+'" target="_blank">Carfax</a><a class="rl" href="https://www.nicb.org/vincheck?vin='+vin+'" target="_blank">NICB</a><a class="rl" href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank">NHTSA</a><a class="rl" href="https://turo.com/us/en/search?defaultZipCode='+zip+'&location=Las+Vegas" target="_blank">Turo LV</a></div>';
+    H+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">'+(canEdit()?'<button class="btn btn-o" onclick="addFromVIN()">+ Add to Fleet</button>':'')+'</div>';
+
+    document.getElementById('vin-res').innerHTML=H;
     document.getElementById('vin-res').style.display='block';
     logAct('VIN Lookup',cv.year+' '+cv.make+' '+cv.model);
+
+    // Init depreciation chart after DOM is ready
+    setTimeout(()=>{
+      const ctx=document.getElementById('dep-chart');
+      if(!ctx)return;
+      if(depChart){depChart.destroy();depChart=null;}
+      depChart=new Chart(ctx,{type:'line',data:{labels:chartYrs.map(y=>y+'yr'),datasets:[{label:'Est. Value',data:chartVals,borderColor:'rgba(181,136,99,.8)',backgroundColor:'rgba(181,136,99,.08)',fill:true,tension:0.4,pointRadius:chartYrs.map(y=>y===age?7:3),pointBackgroundColor:chartYrs.map(y=>y===age?'#63ffc8':'rgba(181,136,99,.8)'),pointBorderColor:chartYrs.map(y=>y===age?'#63ffc8':'transparent'),pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},annotation:{annotations:{sweetSpot:{type:'box',xMin:swS-0.5,xMax:swE+0.5,backgroundColor:'rgba(109,186,125,.07)',borderColor:'rgba(109,186,125,.3)',borderWidth:1,label:{display:true,content:'Sweet Spot',color:'rgba(109,186,125,.7)',font:{size:10,family:"'Rajdhani',sans-serif",weight:'600'},position:{x:'center',y:'start'}}}}}},scales:{x:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10}}},y:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10},callback:v=>'$'+Math.round(v/1000)+'k'}}}}});
+    },120);
+
   }catch(err){toast('Error: '+err.message);}
   finally{document.getElementById('vin-load').style.display='none';document.getElementById('lu-btn').disabled=false;}
 }
