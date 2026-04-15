@@ -2138,7 +2138,8 @@ function renderCal(){
 
 // ── WORK LOG ──
 let wrkTab='log',wrkMgTab='team',wrkMonth=new Date().toISOString().slice(0,7),wrkFilter='all',wrkUser='all';
-function wSetTab(t){if(isMgr()||SA)wrkMgTab=t;else wrkTab=t;renderWork();}
+function wCanManage(){return isMgr()||SA||teamRole()==='accountant';}
+function wSetTab(t){if(wCanManage())wrkMgTab=t;else wrkTab=t;renderWork();}
 function wNavMonth(d){const[y,m]=wrkMonth.split('-').map(Number);const nd=new Date(y,m-1+d,1);wrkMonth=nd.getFullYear()+'-'+(nd.getMonth()+1).toString().padStart(2,'0');renderWork();}
 function wSetFilter(f){wrkFilter=f;renderWork();}
 function wSetUser(u){wrkUser=u;renderWork();}
@@ -2153,7 +2154,7 @@ function renderWork(){
   const rates=D.get(D.tk('payrates'),{});
   const f=D.fleet();
   const myRole=teamRole();
-  const canManage=isMgr()||SA;
+  const canManage=wCanManage();
   const fmtType=t=>({detailing:'Detailing',maintenance:'Maintenance',delivery:'Delivery / Transport',wash:'Car Wash',other:'Other'}[t]||t);
   const typeCol=t=>({detailing:'var(--acc2)',maintenance:'var(--amb)',delivery:'var(--grn)',wash:'#6ab4d4',other:'var(--tx2)'}[t]||'var(--tx2)');
   const typeIcon=t=>({detailing:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>',maintenance:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',delivery:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',wash:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>'}[t]||'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>');
@@ -2316,14 +2317,14 @@ function renderWork(){
       H+=monthNav;
       const pending=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth)&&e.status==='pending');
       if(pending.length)H+='<div style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.22);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:9px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amb)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span style="font-size:12px;color:var(--amb);font-weight:600">'+pending.length+' entr'+(pending.length===1?'y':'ies')+' awaiting approval</span></div>';
-      // Worker filter pills
-      const workers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname}])).values()];
-      if(workers.length>1){
-        H+='<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
-          +'<button onclick="wSetUser(\'all\')" style="'+btnStyle(wrkUser==='all')+'">ALL</button>';
-        workers.forEach(w=>{H+='<button onclick="wSetUser(\''+w.uid+'\')" style="'+btnStyle(wrkUser===w.uid)+'">'+w.uname.split(' ')[0].toUpperCase()+'</button>';});
-        H+='</div>';
-      }
+      // Employee selector dropdown
+      const workers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname,urole:e.urole}])).values()];
+      H+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+        +'<label style="font-size:11px;color:var(--tx3);font-weight:600;white-space:nowrap">Employee:</label>'
+        +'<select class="fi" style="flex:1;padding:6px 10px;font-size:12px" onchange="wSetUser(this.value)">'
+        +'<option value="all"'+(wrkUser==='all'?' selected':'')+'>All Employees</option>';
+      workers.forEach(w=>{H+='<option value="'+w.uid+'"'+(wrkUser===w.uid?' selected':'')+'>'+w.uname+' ('+w.urole+')</option>';});
+      H+='</select></div>';
       let me=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
       if(wrkUser!=='all')me=me.filter(e=>e.uid===wrkUser);
       if(!me.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">No entries for this period</div></div>';}
@@ -2358,6 +2359,16 @@ function renderWork(){
 
     else if(tab==='payroll'){
       H+=monthNav;
+      const ph=D.get(D.tk('payhistory'),{});
+      // Build worker list from ALL time (not just this month) so all team members appear
+      const allWorkers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname,urole:e.urole}])).values()];
+      // Also show employee selector to jump to specific worker
+      H+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
+        +'<label style="font-size:11px;color:var(--tx3);font-weight:600;white-space:nowrap">Employee:</label>'
+        +'<select class="fi" style="flex:1;padding:6px 10px;font-size:12px" onchange="wSetUser(this.value)">'
+        +'<option value="all"'+(wrkUser==='all'?' selected':'')+'>All Employees</option>';
+      allWorkers.forEach(w=>{H+='<option value="'+w.uid+'"'+(wrkUser===w.uid?' selected':'')+'>'+w.uname+' ('+w.urole+')</option>';});
+      H+='</select></div>';
       const mWl=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
       const byUser={};
       mWl.forEach(e=>{
@@ -2365,35 +2376,86 @@ function renderWork(){
         byUser[e.uid].hrs+=Number(e.hours)||0;byUser[e.uid].jobs+=Number(e.jobs)||0;
         if(e.status==='pending')byUser[e.uid].pending++;else if(e.status==='approved')byUser[e.uid].approved++;
       });
-      const sums=Object.values(byUser);
+      // If filtering to a specific user, show only them; else show all with entries
+      let sums=Object.values(byUser);
+      if(wrkUser!=='all')sums=sums.filter(u=>u.uid===wrkUser);
+      // If selected employee has no entries this month but is in allWorkers, still show their card
+      if(wrkUser!=='all'&&!sums.length){const w=allWorkers.find(x=>x.uid===wrkUser);if(w)sums=[{...w,hrs:0,jobs:0,pending:0,approved:0}];}
       if(!sums.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">No work logged for this period</div></div>';}
       else{
-        let total=0;
+        let total=0,totalPaid=0;
         H+='<div style="display:flex;flex-direction:column;gap:12px">';
         sums.forEach(u=>{
-          const r=rates[u.uid]||{};const pay=Math.round((u.hrs*(r.hourly||0))+(u.jobs*(r.perjob||0)));
-          total+=pay;
+          const r=rates[u.uid]||{};
+          const estPay=Math.round((u.hrs*(r.hourly||0))+(u.jobs*(r.perjob||0)));
+          total+=estPay;
+          // Payments this month
+          const uPays=(ph[u.uid]||[]).filter(p=>p.date&&p.date.startsWith(wrkMonth));
+          const paidThisMonth=uPays.reduce((s,p)=>s+Number(p.amount),0);
+          totalPaid+=paidThisMonth;
+          const balance=estPay-paidThisMonth;
+          const lastPay=(ph[u.uid]||[]).slice().sort((a,b)=>b.ts>a.ts?1:-1)[0];
           H+='<div class="cd">'
+            // Header row
             +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-            +'<div><div style="font-weight:700;font-size:15px;color:var(--tx1)">'+u.uname+'</div>'
-            +'<div style="font-size:11px;color:var(--tx3);text-transform:capitalize;margin-top:2px">'+u.urole+'</div></div>'
+            +'<div>'
+            +'<div style="font-weight:700;font-size:15px;color:var(--tx1)">'+u.uname+'</div>'
+            +'<div style="font-size:11px;color:var(--tx3);text-transform:capitalize;margin-top:2px">'+u.urole+'</div>'
+            +'</div>'
             +(u.pending?'<span class="badge b-a">'+u.pending+' pending</span>':'<span class="badge b-g">All reviewed</span>')
             +'</div>'
-            +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">'
-            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:var(--tx1)">'+u.hrs.toFixed(1)+'</div><div style="font-size:10px;color:var(--tx3)">Hours</div></div>'
-            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:var(--tx1)">'+u.jobs+'</div><div style="font-size:10px;color:var(--tx3)">Jobs</div></div>'
-            +'<div style="text-align:center;background:'+(pay>0?'rgba(109,186,125,.08)':'var(--rg2)')+';border:1px solid '+(pay>0?'rgba(109,186,125,.2)':'var(--bd)')+';border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:'+(pay>0?'var(--grn)':'var(--tx3)')+'">'+fmt$(pay)+'</div><div style="font-size:10px;color:var(--tx3)">Est. Pay</div></div>'
+            // Stats row: Hours | Jobs | Est Pay
+            +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'
+            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:9px 6px"><div style="font-size:18px;font-weight:700;color:var(--tx1)">'+u.hrs.toFixed(1)+'</div><div style="font-size:10px;color:var(--tx3)">Hours</div></div>'
+            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:9px 6px"><div style="font-size:18px;font-weight:700;color:var(--tx1)">'+u.jobs+'</div><div style="font-size:10px;color:var(--tx3)">Jobs</div></div>'
+            +'<div style="text-align:center;background:'+(estPay>0?'rgba(109,186,125,.07)':'var(--rg2)')+';border:1px solid '+(estPay>0?'rgba(109,186,125,.18)':'var(--bd)')+';border-radius:8px;padding:9px 6px"><div style="font-size:18px;font-weight:700;color:'+(estPay>0?'var(--grn)':'var(--tx3)')+'">'+fmt$(estPay)+'</div><div style="font-size:10px;color:var(--tx3)">Est. Earned</div></div>'
             +'</div>'
-            +'<div style="background:var(--rg2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--tx3);display:flex;gap:14px">'
+            // Payment balance row
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+            +'<div style="background:var(--rg2);border-radius:8px;padding:9px 10px;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--tx1)">'+fmt$(paidThisMonth)+'</div><div style="font-size:10px;color:var(--tx3)">Paid This Month</div></div>'
+            +'<div style="background:'+(balance>0?'rgba(255,100,50,.07)':balance===0?'var(--rg2)':'rgba(109,186,125,.07)')+';border:1px solid '+(balance>0?'rgba(255,100,50,.2)':balance===0?'var(--bd)':'rgba(109,186,125,.2)')+';border-radius:8px;padding:9px 10px;text-align:center">'
+            +'<div style="font-size:16px;font-weight:700;color:'+(balance>0?'var(--red)':balance===0?'var(--tx3)':'var(--grn)')+'">'+fmt$(Math.abs(balance))+'</div>'
+            +'<div style="font-size:10px;color:var(--tx3)">'+(balance>0?'Balance Due':balance===0?'Fully Paid':'Overpaid')+'</div>'
+            +'</div></div>'
+            // Rate info + last payment
+            +'<div style="background:var(--rg2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+            +'<div style="display:flex;gap:12px;color:var(--tx3)">'
             +(r.hourly?'<span><strong style="color:var(--tx2)">'+fmt$(r.hourly)+'</strong>/hr</span>':'')
             +(r.perjob?'<span><strong style="color:var(--tx2)">'+fmt$(r.perjob)+'</strong>/job</span>':'')
-            +(!r.hourly&&!r.perjob?'<span style="color:var(--tx3)">No rate set</span>':'')
+            +(!r.hourly&&!r.perjob?'<span style="color:var(--tx3);font-style:italic">No rate set</span>':'')
             +'</div>'
-            +'<button class="btn btn-d btn-f btn-s" onclick="showPayRateModal(\''+u.uid+'\',\''+u.uname+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Set Pay Rate</button>'
+            +(lastPay?'<span style="font-size:10px;color:var(--tx3)">Last paid: <strong style="color:var(--tx2)">'+lastPay.date+'</strong></span>':'')
+            +'</div>'
+            // Payment history (last 3)
+            +(uPays.length?'<div style="margin-bottom:10px">'
+              +'<div style="font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--tx3);margin-bottom:5px">PAYMENTS THIS MONTH</div>'
+              +'<div style="display:flex;flex-direction:column;gap:4px">'
+              +uPays.slice(-3).reverse().map(p=>'<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:5px 8px;background:rgba(109,186,125,.05);border-radius:6px">'
+                +'<span style="color:var(--grn);font-weight:600">'+fmt$(p.amount)+'</span>'
+                +'<span style="color:var(--tx3)">'+p.date+'</span>'
+                +'<span style="color:var(--tx3);background:var(--rg2);padding:1px 6px;border-radius:4px;font-size:10px">'+p.method+'</span>'
+                +(p.note?'<span style="color:var(--tx3);font-style:italic">'+p.note+'</span>':'')
+                +'</div>').join('')
+              +'</div></div>':'')
+            // Action buttons
+            +'<div style="display:flex;gap:8px">'
+            +'<button class="btn btn-g btn-f" style="flex:1" onclick="showRecordPayment(\''+u.uid+'\',\''+u.uname+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Record Payment</button>'
+            +'<button class="btn btn-d btn-s" onclick="showPayRateModal(\''+u.uid+'\',\''+u.uname+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Set Rate</button>'
+            +'</div>'
             +'</div>';
         });
         H+='</div>';
-        if(total>0)H+='<div style="margin-top:14px;background:rgba(109,186,125,.07);border:1px solid rgba(109,186,125,.2);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--grn)">Total Payroll Est.</span><span style="font-size:22px;font-weight:700;color:var(--grn)">'+fmt$(total)+'</span></div>';
+        // Payroll summary footer
+        if(total>0||totalPaid>0){
+          const bal=total-totalPaid;
+          H+='<div style="margin-top:14px;background:var(--rg2);border:1px solid var(--bd);border-radius:10px;padding:14px 16px">'
+            +'<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:var(--tx3);margin-bottom:10px">'+fmtMo(wrkMonth).toUpperCase()+' PAYROLL SUMMARY</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+            +'<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--grn)">'+fmt$(total)+'</div><div style="font-size:10px;color:var(--tx3)">Total Earned</div></div>'
+            +'<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--tx1)">'+fmt$(totalPaid)+'</div><div style="font-size:10px;color:var(--tx3)">Total Paid Out</div></div>'
+            +'<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:'+(bal>0?'var(--red)':'var(--grn)')+'">'+fmt$(Math.abs(bal))+'</div><div style="font-size:10px;color:var(--tx3)">'+(bal>0?'Still Owed':'Fully Settled')+'</div></div>'
+            +'</div></div>';
+        }
       }
     }
 
@@ -2487,6 +2549,37 @@ function savePayRate(){
   rates[uid]={hourly:hrly,perjob};
   D.set(D.tk('payrates'),rates);
   hideM();toast('Pay rate saved');
+  renderWork();
+}
+
+function showRecordPayment(uid,uname){
+  const td=new Date().toISOString().split('T')[0];
+  document.getElementById('ml-acct').innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Record Payment</span><span class="sh-l"></span></div>'
+    +'<div style="background:rgba(109,186,125,.07);border:1px solid rgba(109,186,125,.18);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--tx2)">Recording payment to <strong style="color:var(--tx1)">'+uname+'</strong></div>'
+    +'<input type="hidden" id="rp-uid" value="'+uid+'">'
+    +'<div class="fg"><label class="fl">Amount Paid ($)</label><input type="number" class="fi" id="rp-amt" placeholder="e.g. 250" min="0" step="0.01"></div>'
+    +'<div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="rp-date" value="'+td+'"></div>'
+    +'<div class="fg"><label class="fl">Payment Method</label><select class="fi" id="rp-method"><option>Cash</option><option>Venmo</option><option>Zelle</option><option>Check</option><option>Bank Transfer</option><option>PayPal</option><option>Other</option></select></div>'
+    +'<div class="fg"><label class="fl">Note (optional)</label><input type="text" class="fi" id="rp-note" placeholder="e.g. Check #1042, weekly pay"></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-g btn-f" onclick="savePayment()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Save Payment</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+  document.getElementById('m-acct').classList.add('show');
+}
+
+function savePayment(){
+  const uid=document.getElementById('rp-uid').value;
+  const amount=parseFloat(document.getElementById('rp-amt').value);
+  const date=document.getElementById('rp-date').value;
+  const method=document.getElementById('rp-method').value;
+  const note=document.getElementById('rp-note').value.trim();
+  if(!amount||amount<=0){toast('Enter a valid amount');return;}
+  if(!date){toast('Enter a date');return;}
+  const ph=D.get(D.tk('payhistory'),{});
+  if(!ph[uid])ph[uid]=[];
+  ph[uid].push({id:Date.now().toString(),amount,date,method,note,recordedBy:CU?.name||CU?.email||'Unknown',ts:new Date().toISOString()});
+  D.set(D.tk('payhistory'),ph);
+  hideM();
+  toast('Payment of '+fmt$(amount)+' recorded');
   renderWork();
 }
 
