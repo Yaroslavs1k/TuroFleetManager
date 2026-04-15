@@ -2137,124 +2137,297 @@ function renderCal(){
 }
 
 // ── WORK LOG ──
+let wrkTab='log',wrkMgTab='team',wrkMonth=new Date().toISOString().slice(0,7),wrkFilter='all',wrkUser='all';
+function wSetTab(t){if(isMgr()||SA)wrkMgTab=t;else wrkTab=t;renderWork();}
+function wNavMonth(d){const[y,m]=wrkMonth.split('-').map(Number);const nd=new Date(y,m-1+d,1);wrkMonth=nd.getFullYear()+'-'+(nd.getMonth()+1).toString().padStart(2,'0');renderWork();}
+function wSetFilter(f){wrkFilter=f;renderWork();}
+function wSetUser(u){wrkUser=u;renderWork();}
+
 function renderWork(){
+  const pg=document.getElementById('pg-work');
+  if(!CT&&!SA){
+    pg.innerHTML='<div style="text-align:center;padding:60px 20px"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="1.5" opacity=".4" style="margin-bottom:12px"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--acc2);margin-bottom:8px">Join a Team First</div><div style="font-size:12px;color:var(--tx2);line-height:1.6;max-width:300px;margin:0 auto 20px">Work Log is only available once you have joined a team and been assigned a role.</div><button class="btn btn-r" onclick="showNewTeam()">Create or Join Team</button></div>';
+    return;
+  }
   const wl=D.get(D.tk('worklog'),[]);
   const rates=D.get(D.tk('payrates'),{});
   const f=D.fleet();
   const myRole=teamRole();
-  const isWorker=['detailer','mechanic','delivery_driver','employee'].includes(myRole);
   const canManage=isMgr()||SA;
-  const now=new Date();
-  const tm=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
-  const entries=canManage?wl:wl.filter(e=>e.uid===CU?.id);
-  const myEntries=wl.filter(e=>e.uid===CU?.id);
-  const fmtType=t=>({detailing:'Detailing',maintenance:'Maintenance',delivery:'Delivery',wash:'Car Wash',other:'Other'}[t]||t);
+  const fmtType=t=>({detailing:'Detailing',maintenance:'Maintenance',delivery:'Delivery / Transport',wash:'Car Wash',other:'Other'}[t]||t);
   const typeCol=t=>({detailing:'var(--acc2)',maintenance:'var(--amb)',delivery:'var(--grn)',wash:'#6ab4d4',other:'var(--tx2)'}[t]||'var(--tx2)');
+  const typeIcon=t=>({detailing:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>',maintenance:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',delivery:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',wash:'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>'}[t]||'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>');
   const calcPay=(e)=>{const r=rates[e.uid]||{};return Math.round(((e.hours||0)*(r.hourly||0))+((e.jobs||0)*(r.perjob||0)));};
+  const fmtMo=(ym)=>{const[y,m]=ym.split('-');return new Date(y,m-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});};
+  const btnStyle=(active)=>'padding:5px 12px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.8px;font-family:Rajdhani,sans-serif;cursor:pointer;border:1px solid '+(active?'var(--acc2)':'rgba(181,136,99,.2)')+';background:'+(active?'rgba(181,136,99,.15)':'transparent')+';color:'+(active?'var(--acc2)':'var(--tx3)');
+  const monthNav='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
+    +'<button onclick="wNavMonth(-1)" style="width:28px;height:28px;border-radius:50%;background:var(--rg2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">&#8249;</button>'
+    +'<span style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--tx1);min-width:140px;text-align:center">'+fmtMo(wrkMonth)+'</span>'
+    +'<button onclick="wNavMonth(1)" style="width:28px;height:28px;border-radius:50%;background:var(--rg2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">&#8250;</button>'
+    +'</div>';
 
-  let H='<div class="sh"><span class="sh-t">Work Log</span><span class="sh-l"></span>'+(isWorker||canManage?'<span class="sh-a" onclick="showWorkModal()">+ Log Work</span>':'')+'</div>';
+  const tab=canManage?wrkMgTab:wrkTab;
+  const tabs=canManage
+    ?[{id:'team',label:'Team Log',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>'},{id:'payroll',label:'Payroll',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>'},{id:'mylog',label:'My Log',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'}]
+    :[{id:'log',label:'My Log',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'},{id:'pay',label:'My Pay',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>'},{id:'stats',label:'Stats',icon:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>'}];
 
-  // ── EMPLOYEE: my summary + my entries ──
-  if(isWorker&&!canManage){
-    const mMine=myEntries.filter(e=>e.date&&e.date.startsWith(tm));
+  // ── HEADER ──
+  let H='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
+    +'<div>'
+    +'<div style="font-family:Rajdhani,sans-serif;font-size:24px;font-weight:700;color:var(--tx1);line-height:1">Work Log</div>'
+    +'<div style="font-size:11px;color:var(--tx3);margin-top:3px">'+(CT?CT.name:'Team')+' &middot; '+rb(SA?'superadmin':myRole)+'</div>'
+    +'</div>'
+    +'<button class="btn btn-r" style="display:flex;align-items:center;gap:8px;padding:10px 20px;font-size:13px;font-weight:700;letter-spacing:.5px" onclick="showWorkModal()">'
+    +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    +'Log Work</button>'
+    +'</div>';
+
+  // ── SUB-TABS ──
+  H+='<div class="adm-tabs" style="margin-bottom:20px">';
+  tabs.forEach(t=>{
+    H+='<button class="set-stab adm-tab'+(tab===t.id?' a':'')+'" style="display:inline-flex;align-items:center;gap:5px" onclick="wSetTab(\''+t.id+'\')">'+t.icon+t.label+'</button>';
+  });
+  H+='</div>';
+
+  // ── WORKER TABS ──
+  if(!canManage){
+    const mine=wl.filter(e=>e.uid===CU?.id);
+    const mMine=mine.filter(e=>e.date&&e.date.startsWith(wrkMonth));
     const mHrs=mMine.reduce((s,e)=>s+(Number(e.hours)||0),0);
     const mJobs=mMine.reduce((s,e)=>s+(Number(e.jobs)||0),0);
     const mPay=mMine.reduce((s,e)=>s+calcPay(e),0);
     const r=rates[CU?.id]||{};
-    H+='<div class="g3" style="margin-bottom:14px">'
-      +'<div class="sc"><div class="sc-sub">Hours This Month</div><div class="sc-val">'+mHrs.toFixed(1)+'</div><div class="sc-lbl">Logged</div></div>'
-      +'<div class="sc"><div class="sc-sub">Jobs This Month</div><div class="sc-val">'+mJobs+'</div><div class="sc-lbl">Completed</div></div>'
-      +'<div class="sc"><div class="sc-sub">Est. Pay</div><div class="sc-val grn">'+(mPay>0?fmt$(mPay):(r.hourly||r.perjob)?fmt$(mPay):'—')+'</div><div class="sc-lbl">'+(r.hourly||r.perjob?'This Month':'Rate not set')+'</div></div>'
-      +'</div>';
-    if(!myEntries.length){H+='<div class="empty" style="padding:40px 0">No entries yet — tap + Log Work to get started</div>';}
-    else{
-      H+='<div class="lc">';
-      myEntries.slice().reverse().forEach(e=>{
-        const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
-        const pay=calcPay(e);
-        H+='<div style="padding:10px 12px;border-bottom:1px solid var(--bd)">'
-          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
-          +'<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+typeCol(e.type)+'">'+fmtType(e.type).toUpperCase()+'</span>'
-          +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
-          +(veh?'<span style="font-size:11px;color:var(--tx3)">• '+veh+'</span>':'')
-          +'<span class="badge '+(e.status==='approved'?'b-g':e.status==='rejected'?'b-red':'b-a')+'" style="margin-left:auto">'+e.status+'</span>'
-          +'</div>'
-          +'<div style="display:flex;gap:16px;font-size:11px;color:var(--tx2)">'
-          +(e.hours?'<span>'+e.hours+' hrs</span>':'')
-          +(e.jobs?'<span>'+e.jobs+' job'+(e.jobs>1?'s':'')+'</span>':'')
-          +(pay>0?'<span style="color:var(--grn)">'+fmt$(pay)+'</span>':'')
-          +'</div>'
-          +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:3px">'+e.notes+'</div>':'')
-          +'</div>';
+    const hasRate=r.hourly||r.perjob;
+
+    if(tab==='log'){
+      H+=monthNav;
+      H+='<div class="g3" style="margin-bottom:16px">'
+        +'<div class="sc"><div class="sc-sub">Hours</div><div class="sc-val">'+mHrs.toFixed(1)+'</div><div class="sc-lbl">This month</div></div>'
+        +'<div class="sc"><div class="sc-sub">Jobs</div><div class="sc-val">'+mJobs+'</div><div class="sc-lbl">Completed</div></div>'
+        +'<div class="sc"><div class="sc-sub">Est. Pay</div><div class="sc-val grn">'+(hasRate?fmt$(mPay):'—')+'</div><div class="sc-lbl">'+(hasRate?'This month':'Rate not set')+'</div></div>'
+        +'</div>';
+      // Filter pills
+      H+='<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">';
+      ['all','pending','approved','rejected'].forEach(fi=>{
+        const cnt=fi==='all'?mMine.length:mMine.filter(e=>e.status===fi).length;
+        H+='<button onclick="wSetFilter(\''+fi+'\')" style="'+btnStyle(wrkFilter===fi)+'">'+fi.toUpperCase()+' ('+cnt+')</button>';
       });
       H+='</div>';
+      const filtered=wrkFilter==='all'?mMine:mMine.filter(e=>e.status===wrkFilter);
+      if(!filtered.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="1.5" opacity=".4" style="margin-bottom:10px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg><div style="font-size:12px;color:var(--tx3)">'+(mine.length?'No '+wrkFilter+' entries for this month — try a different filter or month':'Nothing logged yet — hit Log Work to get started')+'</div></div>';}
+      else{
+        H+='<div class="lc">';
+        filtered.slice().reverse().forEach(e=>{
+          const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
+          const pay=calcPay(e);
+          H+='<div style="padding:13px 14px;border-bottom:1px solid var(--bd)">'
+            +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">'
+            +'<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.8px;color:'+typeCol(e.type)+'">'+typeIcon(e.type)+fmtType(e.type).toUpperCase()+'</span>'
+            +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
+            +(veh?'<span style="font-size:10px;color:var(--tx3)">&middot; '+veh+'</span>':'')
+            +'<span class="badge '+(e.status==='approved'?'b-g':e.status==='rejected'?'b-red':'b-a')+'" style="margin-left:auto">'+e.status+'</span>'
+            +'</div>'
+            +'<div style="display:flex;gap:14px;font-size:12px;color:var(--tx2)">'
+            +(e.hours?'<span><strong style="color:var(--tx1)">'+e.hours+'</strong> hrs</span>':'')
+            +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
+            +(pay>0&&hasRate?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
+            +'</div>'
+            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+e.notes+'</div>':'')
+            +'</div>';
+        });
+        H+='</div>';
+      }
+    }
+
+    else if(tab==='pay'){
+      // Rate card
+      H+='<div class="cd" style="margin-bottom:16px">';
+      H+='<div class="sh" style="margin-top:0"><span class="sh-t">My Pay Rate</span><span class="sh-l"></span></div>';
+      if(hasRate){
+        H+='<div style="display:flex;gap:12px;flex-wrap:wrap">';
+        if(r.hourly)H+='<div style="flex:1;min-width:120px;background:rgba(109,186,125,.08);border:1px solid rgba(109,186,125,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--grn)">'+fmt$(r.hourly)+'</div><div style="font-size:10px;color:var(--tx3);margin-top:3px">per hour</div></div>';
+        if(r.perjob)H+='<div style="flex:1;min-width:120px;background:rgba(181,136,99,.08);border:1px solid rgba(181,136,99,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--acc2)">'+fmt$(r.perjob)+'</div><div style="font-size:10px;color:var(--tx3);margin-top:3px">per job</div></div>';
+        H+='</div>';
+      }else{H+='<div style="padding:8px 0;font-size:12px;color:var(--tx3)">Your pay rate hasn\'t been set yet. Ask your manager to set it in the Payroll tab.</div>';}
+      H+='</div>';
+      // Monthly table
+      H+='<div class="sh"><span class="sh-t">Monthly Earnings</span><span class="sh-l"></span><span class="sh-l" style="font-size:10px;color:var(--tx3)">(approved only)</span></div>';
+      const months=[];const now2=new Date();
+      for(let i=5;i>=0;i--){const d=new Date(now2.getFullYear(),now2.getMonth()-i,1);months.push(d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0'));}
+      H+='<div class="lc">'
+        +'<div style="display:grid;grid-template-columns:1fr 60px 50px 70px;gap:6px;padding:8px 14px;font-size:9px;font-weight:700;letter-spacing:1px;color:var(--tx3);border-bottom:1px solid var(--bd)"><span>MONTH</span><span style="text-align:right">HRS</span><span style="text-align:right">JOBS</span><span style="text-align:right">PAY</span></div>';
+      let tH=0,tJ=0,tP=0;
+      months.forEach(ym=>{
+        const mes=mine.filter(e=>e.date&&e.date.startsWith(ym)&&e.status==='approved');
+        const hrs=mes.reduce((s,e)=>s+(Number(e.hours)||0),0);
+        const jobs=mes.reduce((s,e)=>s+(Number(e.jobs)||0),0);
+        const pay=mes.reduce((s,e)=>s+calcPay(e),0);
+        tH+=hrs;tJ+=jobs;tP+=pay;
+        const isCur=ym===new Date().toISOString().slice(0,7);
+        H+='<div style="display:grid;grid-template-columns:1fr 60px 50px 70px;gap:6px;padding:10px 14px;border-bottom:1px solid var(--bd);font-size:12px'+(isCur?';background:rgba(181,136,99,.04)':'')+'">'
+          +'<span style="color:var(--tx2)'+(isCur?';font-weight:600':'')+'">'+fmtMo(ym)+'</span>'
+          +'<span style="color:var(--tx1);text-align:right">'+hrs.toFixed(1)+'</span>'
+          +'<span style="color:var(--tx1);text-align:right">'+jobs+'</span>'
+          +'<span style="text-align:right;color:'+(pay>0?'var(--grn)':'var(--tx3)')+';font-weight:'+(pay>0?'600':'400')+'">'+(hasRate?(pay>0?fmt$(pay):'$0'):'—')+'</span>'
+          +'</div>';
+      });
+      H+='<div style="display:grid;grid-template-columns:1fr 60px 50px 70px;gap:6px;padding:10px 14px;font-size:12px;font-weight:700;background:var(--rg2)">'
+        +'<span style="color:var(--tx1)">6-Month Total</span>'
+        +'<span style="text-align:right;color:var(--tx1)">'+tH.toFixed(1)+'</span>'
+        +'<span style="text-align:right;color:var(--tx1)">'+tJ+'</span>'
+        +'<span style="text-align:right;color:var(--grn)">'+(hasRate?fmt$(tP):'—')+'</span>'
+        +'</div>';
+      H+='</div>';
+    }
+
+    else if(tab==='stats'){
+      const totHrs=mine.reduce((s,e)=>s+(Number(e.hours)||0),0);
+      const totJobs=mine.reduce((s,e)=>s+(Number(e.jobs)||0),0);
+      const approved=mine.filter(e=>e.status==='approved').length;
+      const pct=mine.length?Math.round(approved/mine.length*100):0;
+      H+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'
+        +'<div class="sc"><div class="sc-sub">Total Hours</div><div class="sc-val">'+totHrs.toFixed(1)+'</div><div class="sc-lbl">All time</div></div>'
+        +'<div class="sc"><div class="sc-sub">Total Jobs</div><div class="sc-val">'+totJobs+'</div><div class="sc-lbl">All time</div></div>'
+        +'<div class="sc"><div class="sc-sub">Entries</div><div class="sc-val">'+mine.length+'</div><div class="sc-lbl">Logged</div></div>'
+        +'<div class="sc"><div class="sc-sub">Approved</div><div class="sc-val grn">'+pct+'%</div><div class="sc-lbl">Approval rate</div></div>'
+        +'</div>';
+      const byType={};mine.forEach(e=>{if(e.type)byType[e.type]=(byType[e.type]||0)+(Number(e.hours)||0);});
+      if(Object.keys(byType).length){
+        H+='<div class="sh"><span class="sh-t">By Work Type</span><span class="sh-l"></span></div><div class="lc">';
+        Object.entries(byType).sort((a,b)=>b[1]-a[1]).forEach(([t,hrs])=>{
+          const p=totHrs?Math.round(hrs/totHrs*100):0;
+          H+='<div style="padding:11px 14px;border-bottom:1px solid var(--bd)">'
+            +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+            +'<span style="font-size:12px;font-weight:600;color:'+typeCol(t)+';display:flex;align-items:center;gap:5px">'+typeIcon(t)+fmtType(t)+'</span>'
+            +'<span style="font-size:11px;color:var(--tx3)">'+hrs.toFixed(1)+' hrs &middot; '+p+'%</span>'
+            +'</div>'
+            +'<div style="height:5px;background:var(--rg2);border-radius:3px">'
+            +'<div style="height:5px;width:'+p+'%;background:'+typeCol(t)+';border-radius:3px;transition:width .5s"></div>'
+            +'</div></div>';
+        });
+        H+='</div>';
+      }else{H+='<div class="empty" style="padding:40px 0">Log some work to see your stats</div>';}
     }
   }
 
-  // ── MANAGER/OWNER: team overview ──
-  if(canManage){
-    // Per-employee summary cards
-    const byUser={};
-    wl.filter(e=>e.date&&e.date.startsWith(tm)).forEach(e=>{
-      if(!byUser[e.uid])byUser[e.uid]={uname:e.uname,urole:e.urole,uid:e.uid,hrs:0,jobs:0,pending:0};
-      byUser[e.uid].hrs+=Number(e.hours)||0;
-      byUser[e.uid].jobs+=Number(e.jobs)||0;
-      if(e.status==='pending')byUser[e.uid].pending++;
-    });
-    const userSummaries=Object.values(byUser);
-    if(userSummaries.length){
-      H+='<div class="sh" style="margin-top:0"><span class="sh-t">This Month — Team Summary</span><span class="sh-l"></span></div>';
-      H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:18px">';
-      userSummaries.forEach(u=>{
-        const r=rates[u.uid]||{};const pay=Math.round((u.hrs*(r.hourly||0))+(u.jobs*(r.perjob||0)));
-        H+='<div class="cd" style="padding:12px">'
-          +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-          +'<div><div style="font-weight:600;font-size:13px">'+u.uname+'</div><div style="font-size:10px;color:var(--tx3);text-transform:capitalize">'+u.urole+'</div></div>'
-          +(u.pending?'<span class="badge b-a">'+u.pending+' pending</span>':'<span class="badge b-g">All clear</span>')
-          +'</div>'
-          +'<div style="display:flex;gap:12px;font-size:11px;color:var(--tx2);margin-bottom:8px">'
-          +'<span><strong style="color:var(--tx1)">'+u.hrs.toFixed(1)+'</strong> hrs</span>'
-          +'<span><strong style="color:var(--tx1)">'+u.jobs+'</strong> jobs</span>'
-          +(pay>0?'<span><strong style="color:var(--grn)">'+fmt$(pay)+'</strong> est.</span>':'')
-          +'</div>'
-          +'<button class="btn btn-o btn-s btn-f" onclick="showPayRateModal(\''+u.uid+'\',\''+u.uname+'\')">Set Pay Rate</button>'
-          +'</div>';
-      });
-      H+='</div>';
+  // ── MANAGER / OWNER TABS ──
+  else{
+    if(tab==='team'){
+      H+=monthNav;
+      const pending=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth)&&e.status==='pending');
+      if(pending.length)H+='<div style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.22);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:9px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amb)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span style="font-size:12px;color:var(--amb);font-weight:600">'+pending.length+' entr'+(pending.length===1?'y':'ies')+' awaiting approval</span></div>';
+      // Worker filter pills
+      const workers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname}])).values()];
+      if(workers.length>1){
+        H+='<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+          +'<button onclick="wSetUser(\'all\')" style="'+btnStyle(wrkUser==='all')+'">ALL</button>';
+        workers.forEach(w=>{H+='<button onclick="wSetUser(\''+w.uid+'\')" style="'+btnStyle(wrkUser===w.uid)+'">'+w.uname.split(' ')[0].toUpperCase()+'</button>';});
+        H+='</div>';
+      }
+      let me=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
+      if(wrkUser!=='all')me=me.filter(e=>e.uid===wrkUser);
+      if(!me.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">No entries for this period</div></div>';}
+      else{
+        H+='<div class="lc">';
+        me.slice().reverse().forEach(e=>{
+          const idx=wl.indexOf(e);
+          const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
+          const pay=calcPay(e);
+          H+='<div style="padding:13px 14px;border-bottom:1px solid var(--bd)">'
+            +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">'
+            +'<span style="font-weight:700;font-size:12px;color:var(--tx1)">'+e.uname+'</span>'
+            +'<span style="font-size:9px;color:var(--tx3);text-transform:capitalize;background:var(--rg2);padding:1px 6px;border-radius:4px">'+e.urole+'</span>'
+            +'<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.8px;color:'+typeCol(e.type)+'">'+typeIcon(e.type)+fmtType(e.type).toUpperCase()+'</span>'
+            +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
+            +(veh?'<span style="font-size:10px;color:var(--tx3)">&middot; '+veh+'</span>':'')
+            +'<div style="margin-left:auto;display:flex;gap:5px">'
+            +(e.status==='pending'
+              ?'<button class="btn btn-g btn-s" onclick="approveWork('+idx+',\'approved\')" title="Approve"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></button><button class="btn btn-red btn-s" onclick="approveWork('+idx+',\'rejected\')" title="Reject"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+              :'<span class="badge '+(e.status==='approved'?'b-g':'b-red')+'">'+e.status+'</span>')
+            +'</div></div>'
+            +'<div style="display:flex;gap:14px;font-size:12px;color:var(--tx2)">'
+            +(e.hours?'<span><strong style="color:var(--tx1)">'+e.hours+'</strong> hrs</span>':'')
+            +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
+            +(pay>0?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
+            +(e.notes?'<span style="color:var(--tx3)">'+e.notes+'</span>':'')
+            +'</div></div>';
+        });
+        H+='</div>';
+      }
     }
 
-    // All entries table
-    H+='<div class="sh"><span class="sh-t">All Entries ('+entries.length+')</span><span class="sh-l"></span></div>';
-    if(!entries.length){H+='<div class="empty" style="padding:32px 0">No work logged yet</div>';}
-    else{
-      H+='<div class="lc">';
-      entries.slice().reverse().forEach((e,ri)=>{
-        const idx=wl.indexOf(e);
-        const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
-        const pay=calcPay(e);
-        H+='<div style="padding:10px 12px;border-bottom:1px solid var(--bd)">'
-          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-          +'<span style="font-weight:600;font-size:12px">'+e.uname+'</span>'
-          +'<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+typeCol(e.type)+'">'+fmtType(e.type).toUpperCase()+'</span>'
-          +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
-          +(veh?'<span style="font-size:11px;color:var(--tx3)">• '+veh+'</span>':'')
-          +'<div style="margin-left:auto;display:flex;align-items:center;gap:6px">'
-          +(e.status==='pending'?'<button class="btn btn-g btn-s" onclick="approveWork('+idx+',\'approved\')">Approve</button><button class="btn btn-red btn-s" onclick="approveWork('+idx+',\'rejected\')">Reject</button>':'<span class="badge '+(e.status==='approved'?'b-g':'b-red')+'">'+e.status+'</span>')
-          +'</div>'
-          +'</div>'
-          +'<div style="display:flex;gap:16px;font-size:11px;color:var(--tx2);margin-top:4px">'
-          +(e.hours?'<span>'+e.hours+' hrs</span>':'')
-          +(e.jobs?'<span>'+e.jobs+' job'+(e.jobs>1?'s':'')+'</span>':'')
-          +(pay>0?'<span style="color:var(--grn)">'+fmt$(pay)+' est.</span>':'')
-          +(e.notes?'<span style="color:var(--tx3)">'+e.notes+'</span>':'')
-          +'</div>'
-          +'</div>';
+    else if(tab==='payroll'){
+      H+=monthNav;
+      const mWl=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
+      const byUser={};
+      mWl.forEach(e=>{
+        if(!byUser[e.uid])byUser[e.uid]={uname:e.uname,urole:e.urole,uid:e.uid,hrs:0,jobs:0,pending:0,approved:0};
+        byUser[e.uid].hrs+=Number(e.hours)||0;byUser[e.uid].jobs+=Number(e.jobs)||0;
+        if(e.status==='pending')byUser[e.uid].pending++;else if(e.status==='approved')byUser[e.uid].approved++;
       });
-      H+='</div>';
+      const sums=Object.values(byUser);
+      if(!sums.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">No work logged for this period</div></div>';}
+      else{
+        let total=0;
+        H+='<div style="display:flex;flex-direction:column;gap:12px">';
+        sums.forEach(u=>{
+          const r=rates[u.uid]||{};const pay=Math.round((u.hrs*(r.hourly||0))+(u.jobs*(r.perjob||0)));
+          total+=pay;
+          H+='<div class="cd">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+            +'<div><div style="font-weight:700;font-size:15px;color:var(--tx1)">'+u.uname+'</div>'
+            +'<div style="font-size:11px;color:var(--tx3);text-transform:capitalize;margin-top:2px">'+u.urole+'</div></div>'
+            +(u.pending?'<span class="badge b-a">'+u.pending+' pending</span>':'<span class="badge b-g">All reviewed</span>')
+            +'</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">'
+            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:var(--tx1)">'+u.hrs.toFixed(1)+'</div><div style="font-size:10px;color:var(--tx3)">Hours</div></div>'
+            +'<div style="text-align:center;background:var(--rg2);border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:var(--tx1)">'+u.jobs+'</div><div style="font-size:10px;color:var(--tx3)">Jobs</div></div>'
+            +'<div style="text-align:center;background:'+(pay>0?'rgba(109,186,125,.08)':'var(--rg2)')+';border:1px solid '+(pay>0?'rgba(109,186,125,.2)':'var(--bd)')+';border-radius:8px;padding:10px 8px"><div style="font-size:20px;font-weight:700;color:'+(pay>0?'var(--grn)':'var(--tx3)')+'">'+fmt$(pay)+'</div><div style="font-size:10px;color:var(--tx3)">Est. Pay</div></div>'
+            +'</div>'
+            +'<div style="background:var(--rg2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--tx3);display:flex;gap:14px">'
+            +(r.hourly?'<span><strong style="color:var(--tx2)">'+fmt$(r.hourly)+'</strong>/hr</span>':'')
+            +(r.perjob?'<span><strong style="color:var(--tx2)">'+fmt$(r.perjob)+'</strong>/job</span>':'')
+            +(!r.hourly&&!r.perjob?'<span style="color:var(--tx3)">No rate set</span>':'')
+            +'</div>'
+            +'<button class="btn btn-d btn-f btn-s" onclick="showPayRateModal(\''+u.uid+'\',\''+u.uname+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Set Pay Rate</button>'
+            +'</div>';
+        });
+        H+='</div>';
+        if(total>0)H+='<div style="margin-top:14px;background:rgba(109,186,125,.07);border:1px solid rgba(109,186,125,.2);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--grn)">Total Payroll Est.</span><span style="font-size:22px;font-weight:700;color:var(--grn)">'+fmt$(total)+'</span></div>';
+      }
+    }
+
+    else if(tab==='mylog'){
+      const mine=wl.filter(e=>e.uid===CU?.id);
+      const mMine=mine.filter(e=>e.date&&e.date.startsWith(wrkMonth));
+      H+=monthNav;
+      if(!mMine.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">'+(mine.length?'No entries for this month':'You haven\'t logged any work yet')+'</div></div>';}
+      else{
+        H+='<div class="lc">';
+        mMine.slice().reverse().forEach(e=>{
+          const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
+          const pay=calcPay(e);const r=rates[CU?.id]||{};
+          H+='<div style="padding:13px 14px;border-bottom:1px solid var(--bd)">'
+            +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">'
+            +'<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.8px;color:'+typeCol(e.type)+'">'+typeIcon(e.type)+fmtType(e.type).toUpperCase()+'</span>'
+            +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
+            +(veh?'<span style="font-size:10px;color:var(--tx3)">&middot; '+veh+'</span>':'')
+            +'<span class="badge '+(e.status==='approved'?'b-g':e.status==='rejected'?'b-red':'b-a')+'" style="margin-left:auto">'+e.status+'</span>'
+            +'</div>'
+            +'<div style="display:flex;gap:14px;font-size:12px;color:var(--tx2)">'
+            +(e.hours?'<span><strong style="color:var(--tx1)">'+e.hours+'</strong> hrs</span>':'')
+            +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
+            +((pay>0&&(r.hourly||r.perjob))?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
+            +'</div>'
+            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+e.notes+'</div>':'')
+            +'</div>';
+        });
+        H+='</div>';
+      }
     }
   }
 
-  document.getElementById('pg-work').innerHTML=H;
+  pg.innerHTML=H;
 }
 
 function showWorkModal(){
