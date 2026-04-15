@@ -1217,7 +1217,7 @@ function isDriver(){return['owner','manager','delivery_driver','superadmin'].inc
 function rb(role){
   const m={owner:'rb rb-owner',manager:'rb rb-manager',employee:'rb rb-employee',readonly:'rb rb-readonly',superadmin:'rb rb-sa',accountant:'rb rb-accountant',detailer:'rb rb-detailer',mechanic:'rb rb-mechanic',delivery_driver:'rb rb-driver'};
   const labels={owner:'Owner',manager:'Manager',employee:'Employee',readonly:'Read Only',superadmin:'Super Admin',accountant:'Accountant',detailer:'Detailer',mechanic:'Mechanic',delivery_driver:'Driver'};
-  if(isDev(CU?.email)&&role==='owner')return'<span class="rb rb-dev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Dev</span>';
+  if(isDev(CU?.email)&&role==='owner')return'<span class="rb rb-dev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2.5"/><polyline points="6 9 3.5 12 6 15"/><line x1="10" y1="12" x2="16" y2="12"/></svg> Dev</span>';
   return'<span class="'+(m[role]||'rb rb-readonly')+'">'+(labels[role]||role||'no role')+'</span>';
 }
 </script>
@@ -1270,7 +1270,7 @@ function getTabs(){
   if(role==='accountant') tabs=base.filter(t=>['dash','fin'].includes(t.id));
   else if(['detailer','mechanic','delivery_driver'].includes(role)) tabs=base.filter(t=>['dash','fleet','cal'].includes(t.id));
   else tabs=[...base];
-  if(isMgr()||isDev(CU?.email))tabs.push({id:'admin',label:'Admin',icon:'<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>'});
+  // Admin moved into Settings sub-tab
   tabs.push({id:'set',label:'Settings',icon:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'});
   return tabs;
 }
@@ -2167,12 +2167,9 @@ function renderFin(){
 
 // ── ADMIN ──
 function renderAdmin(){
-  if(!isMgr()&&!isDev(CU?.email)){document.getElementById('pg-admin').innerHTML='<div class="empty">Access denied</div>';return;}
-  document.getElementById('pg-admin').innerHTML=
-    '<div class="sh"><span class="sh-t">Admin Panel</span><span class="sh-l"></span>'+(CT?'<span style="font-size:11px;color:var(--tx3)">'+CT.name+'</span>':'')+'</div>'
-    +'<div class="adm-tabs"><button class="adm-tab a" onclick="sAt(\'users\',this)">Users &amp; Roles</button><button class="adm-tab" onclick="sAt(\'pending\',this)">Pending</button><button class="adm-tab" onclick="sAt(\'activity\',this)">Activity Log</button><button class="adm-tab" onclick="sAt(\'notif\',this)">Send Notification</button>'+(SA||isDev(CU?.email)?'<button class="adm-tab" onclick="sAt(\'sa\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Dev</button>':'')+'</div>'
-    +'<div id="adm-c"></div>';
-  sAt('users',document.querySelector('.adm-tab'));
+  // Admin panel is now inside Settings — redirect there and open Admin sub-tab
+  sw('set');
+  setTimeout(()=>{const el=document.querySelector('.set-stab:nth-child(2)');if(el)sSetTab('admin',el);},50);
 }
 
 function sAt(tab,el){
@@ -2254,8 +2251,11 @@ function renderSet(){
   const u=CU||{};
   const supaSection=SA||isDev(u.email)?'<div class="sh"><span class="sh-t">Developer Settings</span><span class="sh-l"></span></div><div class="cd"><div style="margin-bottom:10px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'">'+(CONFIGURED?'Supabase Connected':'localStorage Mode')+'</span></div>'+(CONFIGURED?'<p style="font-size:12px;color:var(--grn);margin-bottom:8px">Connected to Supabase cloud.</p><div class="cd-r"><span class="l">Project URL</span><span class="v" style="font-family:monospace;font-size:10px">yeohfqzdgvhwyjmezdii.supabase.co</span></div>':'<div style="font-size:11px;color:var(--tx2);line-height:1.7">Running in demo mode.</div>')+'</div>':'';
 
+  const hasAdm=isMgr()||isDev(u.email);
   document.getElementById('pg-set').innerHTML=
     '<div class="sh"><span class="sh-t">Settings</span><span class="sh-l"></span></div>'
+    +(hasAdm?'<div class="adm-tabs" style="margin-bottom:20px"><button class="set-stab adm-tab a" onclick="sSetTab(\'general\',this)">General</button><button class="set-stab adm-tab" onclick="sSetTab(\'admin\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="2" y="3" width="20" height="18" rx="2.5"/><polyline points="6 9 3.5 12 6 15"/><line x1="10" y1="12" x2="16" y2="12"/></svg>Admin Panel</button></div>':'')
+    +'<div id="set-gen">'
     +'<div class="g2">'
 
     // LEFT COLUMN
@@ -2332,7 +2332,30 @@ function renderSet(){
     +(isDev(CU?.email)?'<button class="btn btn-red btn-f" onclick="if(confirm(\'Clear ALL local data? This cannot be undone.\')){localStorage.clear();location.reload();}" style="display:flex;align-items:center;justify-content:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Clear All Data</button>':'')
     +'</div></div>'
 
-    +'</div></div>';
+    +'</div></div>'
+    +'</div>'
+    +(hasAdm?'<div id="set-adm" style="display:none"></div>':'');
+}
+
+function sSetTab(tab,el){
+  document.querySelectorAll('.set-stab').forEach(t=>t.classList.remove('a'));
+  if(el)el.classList.add('a');
+  const gen=document.getElementById('set-gen');
+  const adm=document.getElementById('set-adm');
+  if(!gen)return;
+  if(tab==='general'){gen.style.display='';if(adm)adm.style.display='none';}
+  else{gen.style.display='none';if(adm){adm.style.display='';renderAdminInSet();}}
+}
+
+function renderAdminInSet(){
+  const c=document.getElementById('set-adm');
+  if(!c)return;
+  if(!isMgr()&&!isDev(CU?.email)){c.innerHTML='<div class="empty">Access denied</div>';return;}
+  c.innerHTML=
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Admin Panel</span><span class="sh-l"></span>'+(CT?'<span style="font-size:11px;color:var(--tx3)">'+CT.name+'</span>':'')+'</div>'
+    +'<div class="adm-tabs"><button class="adm-tab a" onclick="sAt(\'users\',this)">Users &amp; Roles</button><button class="adm-tab" onclick="sAt(\'pending\',this)">Pending</button><button class="adm-tab" onclick="sAt(\'activity\',this)">Activity Log</button><button class="adm-tab" onclick="sAt(\'notif\',this)">Send Notification</button>'+(SA||isDev(CU?.email)?'<button class="adm-tab" onclick="sAt(\'sa\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2.5"/><polyline points="6 9 3.5 12 6 15"/><line x1="10" y1="12" x2="16" y2="12"/></svg> Dev</button>':'')+'</div>'
+    +'<div id="adm-c"></div>';
+  sAt('users',c.querySelector('.adm-tab'));
 }
 
 function renderNotifToggles(){
