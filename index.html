@@ -1884,51 +1884,113 @@ function addFromVIN(){
 }
 
 // ── FLEET ──
+let fleetFilter='all',fleetSort='profit';
+function fSetFilter(f){fleetFilter=f;renderFleet();}
+function fSetSort(s){fleetSort=s;renderFleet();}
+
 function renderFleet(){
   const f=D.fleet();
-  let html='<div class="sh"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'vehicle\')">+ Add Vehicle</span>':'')+'</div>';
-  if(!f.length){html+='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="64" height="42" viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 C4 31 5 32 6 32 L12 32 M20 32 L44 32 M52 32 L58 32 C59 32 60 31 60 30 L60 26 Z"/><circle cx="16" cy="32" r="5"/><circle cx="48" cy="32" r="5"/><path d="M22 14 C20 14 17 18 16 22 L48 22 C47 18 44 12 40 10"/><line x1="32" y1="13" x2="31" y2="22"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:18px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Vehicles Yet</div><div style="font-size:12px;color:var(--tx2);margin-bottom:20px">Add your first vehicle or decode a VIN to get started.</div>'+(canEdit()?'<button class="btn btn-r" onclick="showM(\'vehicle\')">+ Add Vehicle</button>':'')+'</div>';}
-  else{
-    html+='<div class="fg-auto">';
-    f.forEach((v,i)=>{
-      const dets=D.details().filter(d=>d.ci==i).sort((a,b)=>new Date(b.date)-new Date(a.date));
-      const maints=D.maint().filter(m=>m.ci==i).sort((a,b)=>new Date(b.date)-new Date(a.date));
-      const fuels=D.fuels().filter(x=>x.ci==i);
-      const now=new Date(),last=dets[0],days=last?Math.floor((now-new Date(last.date))/864e5):null;
-      const dc=days===null?'var(--tx3)':days>14?'var(--red)':days>7?'var(--amb)':'var(--grn)';
-      const ds=days===null?'Never':days===0?'Today':days+'d ago';
-      // Revenue per mile
-      const totalEarned=D.books().filter(x=>x.ci==i).reduce((s,x)=>s+Number(x.amount||0),0);
-      const totalMiles=fuels.reduce((s,x)=>s+Number(x.miles||0),0);
-      const rpmStr=totalMiles>0?'$'+(totalEarned/totalMiles).toFixed(2)+'/mi':'--';
-      // Current estimated value (simple depreciation)
-      const age2=new Date().getFullYear()-parseInt(v.year||'2020');
-      const estVal=Math.round(Number(v.price||0)*Math.pow(0.92,age2));
+  const mnow=new Date(),mStr=mnow.getFullYear()+'-'+(mnow.getMonth()+1).toString().padStart(2,'0');
 
-      html+='<div class="fc" onclick="showVD('+i+')">'
-        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
-        +'<div><div class="fn">'+v.year+' '+v.make+' '+v.model+'</div>'+(v.trim?'<div class="ft">'+v.trim+'</div>':'')+'</div>'
-        +'<div style="display:flex;gap:5px;align-items:center">'+opStatusBadge(v.op_status)+'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+(v.status||'unlisted')+'</span></div>'
-        +'</div>'
-        +'<div class="sg">'
-        +'<div class="st"><div class="sv">'+fmt$(v.price)+'</div><div class="sl">Purchase</div></div>'
-        +'<div class="st"><div class="sv">'+(v.rate?'$'+v.rate:'--')+'</div><div class="sl">Daily</div></div>'
-        +'<div class="st"><div class="sv">'+(v.trips||0)+'</div><div class="sl">Trips</div></div>'
-        +'<div class="st"><div class="sv" style="font-size:11px;color:'+dc+'">'+ds+'</div><div class="sl">Detail</div></div>'
-        +'</div>'
-        +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);padding-top:8px;border-top:1px solid var(--bd);margin-bottom:8px">'
-        +'<span>Est. Value: <strong style="color:var(--acc2)">'+fmt$(estVal)+'</strong></span>'
-        +'<span>Rev/Mile: <strong style="color:var(--tx)">'+rpmStr+'</strong></span>'
-        +'</div>'
-        +(canEdit()?'<div style="display:flex;align-items:center;gap:6px;padding-bottom:7px;border-bottom:1px solid var(--bd);margin-bottom:7px" onclick="event.stopPropagation()"><span style="font-size:10px;color:var(--tx3);flex-shrink:0">Status:</span><select onchange="setOpStatus('+i+',this.value)" style="background:var(--sf);border:1px solid var(--bd);color:var(--tx2);padding:3px 7px;border-radius:6px;font-size:11px;cursor:pointer;flex:1"><option value="available" '+(v.op_status==='available'||!v.op_status?'selected':'')+'>Available</option><option value="on_trip" '+(v.op_status==='on_trip'?'selected':'')+'>On Trip</option><option value="in_service" '+(v.op_status==='in_service'?'selected':'')+'>In Service</option><option value="being_detailed" '+(v.op_status==='being_detailed'?'selected':'')+'>Being Detailed</option><option value="being_delivered" '+(v.op_status==='being_delivered'?'selected':'')+'>Being Delivered</option><option value="offline" '+(v.op_status==='offline'?'selected':'')+'>Offline</option></select></div>':'')
-        +'<div style="display:flex;gap:5px" onclick="event.stopPropagation()">'
-        +(canEdit()?'<button class="btn btn-s btn-o" onclick="oD('+i+')">+Detail</button><button class="btn btn-s btn-o" onclick="oM('+i+')">+Maint</button><button class="btn btn-s btn-o" onclick="oF('+i+')">+Fuel</button>':'')
-        +(canEdit()?'<button class="btn btn-s '+(v.status==='listed'?'btn-d':'btn-g')+'" onclick="togSt('+i+')">'+(v.status==='listed'?'Unlist':'List')+'</button>':'')
-        +(isOwner()?'<button class="btn btn-s btn-o" onclick="showEditVeh('+i+');event.stopPropagation()">&#9998;</button>':'')
-        +'</div>'
-        +'</div>';
-    });
-    html+='</div>';
+  // Compute per-vehicle stats for sorting
+  const enriched=f.map((v,i)=>{
+    const bks=D.books().filter(x=>Number(x.ci)===i);
+    const exps=D.expenses().filter(x=>Number(x.ci)===i);
+    const mRev=bks.filter(x=>(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
+    const mExp=exps.filter(x=>(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
+    const allRev=bks.reduce((s,x)=>s+Number(x.amount||0),0);
+    const trips=bks.length;
+    const needsMaint=D.maint().some(m=>Number(m.ci)===i&&m.status==='due');
+    return{v,i,mProfit:mRev-mExp,mRev,allRev,trips,needsMaint};
+  });
+
+  // Filter
+  let shown=enriched.filter(({v,needsMaint})=>{
+    if(fleetFilter==='listed')return v.status==='listed';
+    if(fleetFilter==='unlisted')return v.status!=='listed';
+    if(fleetFilter==='maint')return needsMaint;
+    return true;
+  });
+
+  // Sort
+  shown.sort((a,b_)=>{
+    if(fleetSort==='profit')return b_.mProfit-a.mProfit||b_.trips-a.trips;
+    if(fleetSort==='trips')return b_.trips-a.trips;
+    if(fleetSort==='rate')return Number(b_.v.rate||0)-Number(a.v.rate||0);
+    if(fleetSort==='newest')return parseInt(b_.v.year||0)-parseInt(a.v.year||0);
+    return 0;
+  });
+
+  const filterPills=['all','listed','unlisted','maint'].map(ft=>{
+    const labels={all:'All ('+f.length+')',listed:'Listed',unlisted:'Unlisted',maint:'Needs Maint'};
+    return'<button onclick="fSetFilter(\''+ft+'\')" style="padding:5px 12px;border-radius:20px;border:1px solid rgba(181,136,99,'+(fleetFilter===ft?'.6':'.2')+');background:'+(fleetFilter===ft?'rgba(181,136,99,.15)':'transparent')+';color:'+(fleetFilter===ft?'var(--acc2)':'var(--tx2)')+';font-size:11px;font-weight:600;cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif">'+labels[ft]+'</button>';
+  }).join('');
+
+  const sortDrop='<select onchange="fSetSort(this.value)" style="font-family:\'Plus Jakarta Sans\',sans-serif;font-size:11px;background:var(--bg2);border:1px solid rgba(181,136,99,.25);border-radius:6px;color:var(--tx2);padding:4px 8px;cursor:pointer">'
+    +['profit','trips','rate','newest'].map(s=>'<option value="'+s+'"'+(fleetSort===s?' selected':'')+'>'+{profit:'Most Profitable',trips:'Most Trips',rate:'Highest Rate',newest:'Newest Year'}[s]+'</option>').join('')
+    +'</select>';
+
+  let html='<div class="sh"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'vehicle\')">+ Add Vehicle</span>':'')+'</div>';
+
+  if(!f.length){
+    html+='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="64" height="42" viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 C4 31 5 32 6 32 L12 32 M20 32 L44 32 M52 32 L58 32 C59 32 60 31 60 30 L60 26 Z"/><circle cx="16" cy="32" r="5"/><circle cx="48" cy="32" r="5"/><path d="M22 14 C20 14 17 18 16 22 L48 22 C47 18 44 12 40 10"/><line x1="32" y1="13" x2="31" y2="22"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:18px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Vehicles Yet</div><div style="font-size:12px;color:var(--tx2);margin-bottom:20px">Add your first vehicle or decode a VIN to get started.</div>'+(canEdit()?'<button class="btn btn-r" onclick="showM(\'vehicle\')">+ Add Vehicle</button>':'')+'</div>';
+  } else {
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+filterPills+'</div>'
+      +sortDrop
+      +'</div>';
+
+    if(!shown.length){
+      html+='<div style="text-align:center;padding:32px 16px;color:var(--tx3);font-size:12px">No vehicles match this filter.</div>';
+    } else {
+      html+='<div class="fg-auto">';
+      shown.forEach(({v,i,mProfit,allRev,trips,needsMaint})=>{
+        const dets=D.details().filter(d=>d.ci==i).sort((a,b)=>new Date(b.date)-new Date(a.date));
+        const now2=new Date(),last=dets[0],days=last?Math.floor((now2-new Date(last.date))/864e5):null;
+        const dc=days===null?'var(--tx3)':days>14?'var(--red)':days>7?'var(--amb)':'var(--grn)';
+        const ds=days===null?'Never':days===0?'Today':days+'d ago';
+        const age2=now2.getFullYear()-parseInt(v.year||'2020');
+        const estVal=Math.round(Number(v.price||0)*Math.pow(0.92,age2));
+        const profColor=mProfit>0?'var(--grn)':mProfit<0?'var(--red)':'var(--tx3)';
+
+        // Photo or placeholder
+        const photoSection=v.photo
+          ?'<div style="width:100%;height:160px;background:url(\''+v.photo+'\') center/cover no-repeat;border-radius:8px 8px 0 0;margin:-14px -14px 12px -14px;width:calc(100% + 28px);position:relative">'
+            +'<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(10,18,22,.85));border-radius:8px 8px 0 0"></div>'
+            +'<div style="position:absolute;bottom:8px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-end">'
+            +'<div><div class="fn" style="color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">'+v.year+' '+v.make+' '+v.model+'</div>'+(v.trim?'<div class="ft" style="color:rgba(255,255,255,.7)">'+v.trim+'</div>':'')+'</div>'
+            +'<div style="display:flex;gap:4px;align-items:center">'+opStatusBadge(v.op_status)+'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+(v.status||'unlisted')+'</span></div>'
+            +'</div></div>'
+          :'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+            +'<div style="display:flex;align-items:center;gap:10px">'
+            +'<div style="width:44px;height:44px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="22" height="16" viewBox="0 0 64 40" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 L12 30 M20 30 L44 30 M52 30 L60 30 L60 26"/><circle cx="16" cy="30" r="4"/><circle cx="48" cy="30" r="4"/></svg></div>'
+            +'<div><div class="fn">'+v.year+' '+v.make+' '+v.model+'</div>'+(v.trim?'<div class="ft">'+v.trim+'</div>':'')+'</div></div>'
+            +'<div style="display:flex;gap:4px;align-items:center">'+opStatusBadge(v.op_status)+'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+(v.status||'unlisted')+'</span></div>'
+            +'</div>';
+
+        html+='<div class="fc" onclick="showVD('+i+')">'
+          +photoSection
+          +'<div class="sg">'
+          +'<div class="st"><div class="sv">'+(v.rate?'$'+v.rate:'--')+'</div><div class="sl">Daily Rate</div></div>'
+          +'<div class="st"><div class="sv">'+trips+'</div><div class="sl">Trips</div></div>'
+          +'<div class="st"><div class="sv">'+(v.mileage?Number(v.mileage).toLocaleString():'--')+'</div><div class="sl">Miles</div></div>'
+          +'<div class="st"><div class="sv" style="font-size:11px;color:'+dc+'">'+ds+'</div><div class="sl">Last Detail</div></div>'
+          +'</div>'
+          +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);padding:8px 0;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);margin:8px 0">'
+          +'<span>This Month: <strong style="color:'+profColor+'">'+fmt$(mProfit)+'</strong></span>'
+          +'<span>All-time: <strong style="color:var(--acc2)">'+fmt$(allRev)+'</strong></span>'
+          +'<span>Est. Value: <strong style="color:var(--tx)">'+fmt$(estVal)+'</strong></span>'
+          +'</div>'
+          +(canEdit()?'<div style="display:flex;align-items:center;gap:6px;padding-bottom:7px;border-bottom:1px solid var(--bd);margin-bottom:7px" onclick="event.stopPropagation()"><span style="font-size:10px;color:var(--tx3);flex-shrink:0">Status:</span><select onchange="setOpStatus('+i+',this.value)" style="background:var(--sf);border:1px solid var(--bd);color:var(--tx2);padding:3px 7px;border-radius:6px;font-size:11px;cursor:pointer;flex:1"><option value="available" '+(v.op_status==='available'||!v.op_status?'selected':'')+'>Available</option><option value="on_trip" '+(v.op_status==='on_trip'?'selected':'')+'>On Trip</option><option value="in_service" '+(v.op_status==='in_service'?'selected':'')+'>In Service</option><option value="being_detailed" '+(v.op_status==='being_detailed'?'selected':'')+'>Being Detailed</option><option value="being_delivered" '+(v.op_status==='being_delivered'?'selected':'')+'>Being Delivered</option><option value="offline" '+(v.op_status==='offline'?'selected':'')+'>Offline</option></select></div>':'')
+          +'<div style="display:flex;gap:5px" onclick="event.stopPropagation()">'
+          +(canEdit()?'<button class="btn btn-s btn-o" onclick="oD('+i+')">+Detail</button><button class="btn btn-s btn-o" onclick="oM('+i+')">+Maint</button><button class="btn btn-s btn-o" onclick="oF('+i+')">+Fuel</button>':'')
+          +(canEdit()?'<button class="btn btn-s '+(v.status==='listed'?'btn-d':'btn-g')+'" onclick="togSt('+i+')">'+(v.status==='listed'?'Unlist':'List')+'</button>':'')
+          +(isOwner()?'<button class="btn btn-s btn-o" onclick="showEditVeh('+i+');event.stopPropagation()">&#9998; Edit</button>':'')
+          +'</div>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
   }
   document.getElementById('pg-fleet').innerHTML=html;
   if(window._ar)window._ar();
@@ -1949,6 +2011,14 @@ function rmVeh(i){if(!confirm('Remove this vehicle and all its records?'))return
 function showEditVeh(i){
   const v=D.fleet()[i];if(!v)return;
   document.getElementById('ml-editveh').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Edit Vehicle</span><span class="sh-l"></span></div>'
+    // Photo upload
+    +'<div class="fg"><label class="fl">Vehicle Photo</label>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-top:4px">'
+    +'<div id="ev-photo-prev" style="width:80px;height:52px;border-radius:8px;background:'+(v.photo?'url(\''+v.photo+'\') center/cover no-repeat':'var(--sf)')+';border:1px solid var(--bd);flex-shrink:0;display:flex;align-items:center;justify-content:center">'+(v.photo?'':'<svg width="20" height="14" viewBox="0 0 64 40" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 L12 30 M20 30 L44 30 M52 30 L60 30 L60 26"/><circle cx="16" cy="30" r="4"/><circle cx="48" cy="30" r="4"/></svg>')+'</div>'
+    +'<div><label style="cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif;font-size:11px;color:var(--acc2);font-weight:600;border:1px solid rgba(181,136,99,.4);border-radius:6px;padding:5px 10px">Upload Photo<input type="file" accept="image/*" style="display:none" onchange="prevVPhoto(this,'+i+')"></label>'
+    +(v.photo?'<button onclick="clearVPhoto('+i+')" style="display:block;margin-top:6px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif">Remove Photo</button>':'')
+    +'</div>'
+    +'</div></div>'
     +'<div class="fg"><label class="fl">Year</label><input type="number" class="fi" id="ev-yr" value="'+(v.year||'')+'"></div>'
     +'<div class="fg"><label class="fl">Make</label><input type="text" class="fi" id="ev-mk" value="'+(v.make||'')+'"></div>'
     +'<div class="fg"><label class="fl">Model</label><input type="text" class="fi" id="ev-md" value="'+(v.model||'')+'"></div>'
@@ -1965,10 +2035,39 @@ function showEditVeh(i){
     +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveEditVeh('+i+')">Save Changes</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
   showM('editveh');
 }
+let _evPhotoData=null;
+function prevVPhoto(input,i){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const W=400,H=240;
+      const c=document.createElement('canvas');c.width=W;c.height=H;
+      const ctx=c.getContext('2d');
+      const iR=img.width/img.height,tR=W/H;
+      let sx=0,sy=0,sw=img.width,sh=img.height;
+      if(iR>tR){sw=img.height*tR;sx=(img.width-sw)/2;}else{sh=img.width/tR;sy=(img.height-sh)/2;}
+      ctx.drawImage(img,sx,sy,sw,sh,0,0,W,H);
+      _evPhotoData=c.toDataURL('image/jpeg',0.85);
+      const prev=document.getElementById('ev-photo-prev');
+      if(prev){prev.style.background='url(\''+_evPhotoData+'\') center/cover no-repeat';prev.innerHTML='';}
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function clearVPhoto(i){
+  _evPhotoData='__clear__';
+  const prev=document.getElementById('ev-photo-prev');
+  if(prev){prev.style.background='var(--sf)';prev.innerHTML='<svg width="20" height="14" viewBox="0 0 64 40" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 L12 30 M20 30 L44 30 M52 30 L60 30 L60 26"/><circle cx="16" cy="30" r="4"/><circle cx="48" cy="30" r="4"/></svg>';}
+}
 
 function saveEditVeh(i){
   const f=D.fleet();
-  f[i]={...f[i],year:document.getElementById('ev-yr').value,make:document.getElementById('ev-mk').value,model:document.getElementById('ev-md').value,trim:document.getElementById('ev-tr').value,price:document.getElementById('ev-pr').value,rate:document.getElementById('ev-rt').value,trips:document.getElementById('ev-tp').value||0,mileage:document.getElementById('ev-mi').value,vin:document.getElementById('ev-vn').value.toUpperCase(),insurance_due:document.getElementById('ev-ins').value,reg_due:document.getElementById('ev-reg').value,key_notes:document.getElementById('ev-key').value,op_status:document.getElementById('ev-ops').value};
+  const photoUpdate=_evPhotoData==='__clear__'?{photo:''}:_evPhotoData?{photo:_evPhotoData}:{};
+  f[i]={...f[i],...photoUpdate,year:document.getElementById('ev-yr').value,make:document.getElementById('ev-mk').value,model:document.getElementById('ev-md').value,trim:document.getElementById('ev-tr').value,price:document.getElementById('ev-pr').value,rate:document.getElementById('ev-rt').value,trips:document.getElementById('ev-tp').value||0,mileage:document.getElementById('ev-mi').value,vin:document.getElementById('ev-vn').value.toUpperCase(),insurance_due:document.getElementById('ev-ins').value,reg_due:document.getElementById('ev-reg').value,key_notes:document.getElementById('ev-key').value,op_status:document.getElementById('ev-ops').value};
+  _evPhotoData=null;
   DB.saveVehicle(f[i],i).then(()=>{logAct('Vehicle Updated',f[i].year+' '+f[i].make+' '+f[i].model);renderFleet();});hideM();toast('Vehicle updated');
 }
 
