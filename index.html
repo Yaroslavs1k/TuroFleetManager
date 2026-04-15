@@ -2184,11 +2184,22 @@ function renderWork(){
     +'</div>';
 
   // ── SUB-TABS ──
-  H+='<div class="adm-tabs" style="margin-bottom:20px">';
+  H+='<div class="adm-tabs" style="margin-bottom:12px">';
   tabs.forEach(t=>{
     H+='<button class="set-stab adm-tab'+(tab===t.id?' a':'')+'" style="display:inline-flex;align-items:center;gap:5px" onclick="wSetTab(\''+t.id+'\')">'+t.icon+t.label+'</button>';
   });
   H+='</div>';
+
+  // ── EMPLOYEE SELECTOR (manager view, Team Log + Payroll only) ──
+  if(canManage&&tab!=='mylog'){
+    const allW=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname,urole:e.urole}])).values()];
+    H+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+      +'<label style="font-size:11px;color:var(--tx3);font-weight:600;white-space:nowrap;min-width:70px">Employee:</label>'
+      +'<select class="fi" style="flex:1;padding:6px 10px;font-size:12px" onchange="wSetUser(this.value)">'
+      +'<option value="all"'+(wrkUser==='all'?' selected':'')+'>All Employees</option>';
+    allW.forEach(w=>{H+='<option value="'+w.uid+'"'+(wrkUser===w.uid?' selected':'')+'>'+w.uname+' \u2014 '+w.urole+'</option>';});
+    H+='</select></div>';
+  }
 
   // ── WORKER TABS ──
   if(!canManage){
@@ -2317,14 +2328,6 @@ function renderWork(){
       H+=monthNav;
       const pending=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth)&&e.status==='pending');
       if(pending.length)H+='<div style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.22);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:9px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amb)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span style="font-size:12px;color:var(--amb);font-weight:600">'+pending.length+' entr'+(pending.length===1?'y':'ies')+' awaiting approval</span></div>';
-      // Employee selector dropdown
-      const workers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname,urole:e.urole}])).values()];
-      H+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
-        +'<label style="font-size:11px;color:var(--tx3);font-weight:600;white-space:nowrap">Employee:</label>'
-        +'<select class="fi" style="flex:1;padding:6px 10px;font-size:12px" onchange="wSetUser(this.value)">'
-        +'<option value="all"'+(wrkUser==='all'?' selected':'')+'>All Employees</option>';
-      workers.forEach(w=>{H+='<option value="'+w.uid+'"'+(wrkUser===w.uid?' selected':'')+'>'+w.uname+' ('+w.urole+')</option>';});
-      H+='</select></div>';
       let me=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
       if(wrkUser!=='all')me=me.filter(e=>e.uid===wrkUser);
       if(!me.length){H+='<div class="empty" style="padding:48px 0;text-align:center"><div style="font-size:12px;color:var(--tx3)">No entries for this period</div></div>';}
@@ -2360,15 +2363,7 @@ function renderWork(){
     else if(tab==='payroll'){
       H+=monthNav;
       const ph=D.get(D.tk('payhistory'),{});
-      // Build worker list from ALL time (not just this month) so all team members appear
       const allWorkers=[...new Map(wl.map(e=>[e.uid,{uid:e.uid,uname:e.uname,urole:e.urole}])).values()];
-      // Also show employee selector to jump to specific worker
-      H+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
-        +'<label style="font-size:11px;color:var(--tx3);font-weight:600;white-space:nowrap">Employee:</label>'
-        +'<select class="fi" style="flex:1;padding:6px 10px;font-size:12px" onchange="wSetUser(this.value)">'
-        +'<option value="all"'+(wrkUser==='all'?' selected':'')+'>All Employees</option>';
-      allWorkers.forEach(w=>{H+='<option value="'+w.uid+'"'+(wrkUser===w.uid?' selected':'')+'>'+w.uname+' ('+w.urole+')</option>';});
-      H+='</select></div>';
       const mWl=wl.filter(e=>e.date&&e.date.startsWith(wrkMonth));
       const byUser={};
       mWl.forEach(e=>{
