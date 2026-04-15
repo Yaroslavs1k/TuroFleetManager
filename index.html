@@ -411,6 +411,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="mo" id="m-revenue"><div class="ml" id="ml-revenue" style="max-width:580px"></div></div>
 <div class="mo" id="m-csv"><div class="ml" id="ml-csv"></div></div>
 <div class="mo" id="m-profile"><div class="ml" id="ml-profile"></div></div>
+<div class="mo" id="m-acct"><div class="ml" id="ml-acct"></div></div>
 <div class="mo" id="m-vd"><div class="ml" id="ml-vd" style="max-width:680px;max-height:92vh"></div></div>
 <div class="mo" id="m-newteam"><div class="ml" id="ml-newteam"></div></div>
 <div class="mo" id="m-editteam"><div class="ml" id="ml-editteam"></div></div>
@@ -1301,7 +1302,8 @@ function sw(id,btn){
 function showM(id){
   populateDD();
   if(id==='profile'&&CU){
-    document.getElementById('ml-profile').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Your Account</span><span class="sh-l"></span></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:48px;height:48px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(CU.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:\'Rajdhani\',sans-serif;font-weight:700;color:#161616;font-size:20px">'+(CU.name||CU.email||'?')[0].toUpperCase()+'</div><div><div style="font-size:15px;font-weight:600">'+(CU.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(CU.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'+(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+CT.name+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace">'+CT.code+'</span></div>':'')+'<div style="margin-top:14px"><button class="btn btn-red btn-f" onclick="doLogout()">Sign Out</button></div>';
+    const _avCircle=CU.avatar?'<div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;overflow:hidden"><img src="'+CU.avatar+'" style="width:100%;height:100%;object-fit:cover"></div>':'<div style="width:48px;height:48px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(CU.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:\'Rajdhani\',sans-serif;font-weight:700;color:#161616;font-size:20px">'+(CU.name||CU.email||'?')[0].toUpperCase()+'</div>';
+    document.getElementById('ml-profile').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Your Account</span><span class="sh-l"></span></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+_avCircle+'<div><div style="font-size:15px;font-weight:600">'+(CU.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(CU.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'+(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+CT.name+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace">'+CT.code+'</span></div>':'')+'<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-d btn-f" onclick="hideM();sw(\'set\',null)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Edit Profile</button><button class="btn btn-red btn-f" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button></div>';
   }
   document.getElementById('m-'+id).classList.add('show');
 }
@@ -2601,7 +2603,7 @@ function showEditProfile(){
   const avatarHtml=CU?.avatar
     ?'<img id="ep-av-preview" src="'+CU.avatar+'" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block">'
     :'<div id="ep-av-preview" style="width:80px;height:80px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-weight:700;color:#161616;font-size:32px">'+(CU?.name||CU?.email||'?')[0].toUpperCase()+'</div>';
-  document.getElementById('ml-profile').innerHTML=
+  document.getElementById('ml-acct').innerHTML=
     '<div class="sh" style="margin-top:0"><span class="sh-t">Edit Profile</span><span class="sh-l"></span></div>'
     +'<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px">'
     +avatarHtml
@@ -2613,7 +2615,7 @@ function showEditProfile(){
     +'</div>'
     +'<div class="fg"><label class="fl">Display Name</label><input type="text" class="fi" id="ep-name" value="'+(CU?.name||'')+'" placeholder="Your name"></div>'
     +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveProfile()">Save Changes</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
-  showM('profile');
+  document.getElementById('m-acct').classList.add('show');
 }
 
 function previewAvatar(input){
@@ -2664,7 +2666,7 @@ async function saveProfile(){
 }
 
 function showEditAccount(){
-  document.getElementById('ml-profile').innerHTML=
+  document.getElementById('ml-acct').innerHTML=
     '<div class="sh" style="margin-top:0"><span class="sh-t">Account Info</span><span class="sh-l"></span></div>'
     +'<div class="adm-tabs" style="margin-bottom:16px">'
     +'<button class="set-stab adm-tab a" id="ea-tab-email" onclick="eaTab(\'email\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Change Email</button>'
@@ -2681,11 +2683,11 @@ function showEditAccount(){
     +'<div class="fg"><label class="fl">Confirm Password</label><input type="password" class="fi" id="cp-confirm" placeholder="Repeat password" autocomplete="new-password"></div>'
     +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="savePassword()">Update Password</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>'
     +'</div>';
-  showM('profile');
+  document.getElementById('m-acct').classList.add('show');
 }
 
 function eaTab(tab,el){
-  document.querySelectorAll('#m-profile .set-stab').forEach(t=>t.classList.remove('a'));
+  document.querySelectorAll('#m-acct .set-stab').forEach(t=>t.classList.remove('a'));
   if(el)el.classList.add('a');
   document.getElementById('ea-email-pane').style.display=tab==='email'?'':'none';
   document.getElementById('ea-pw-pane').style.display=tab==='pw'?'':'none';
