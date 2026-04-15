@@ -1359,21 +1359,26 @@ function renderDash(){
     slash:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
     alert:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
   };
+  const _np=D.get('notif_prefs',{detail:true,maint:true,insurance:true,registration:true,surge:true});
   const naItems=[];
   f.forEach((car,i)=>{
     const nm=(car.year||'')+' '+(car.make||'')+' '+(car.model||'');
-    // Maintenance overdue
-    D.maint().filter(x=>x.ci==i&&x.nd&&new Date(x.nd)<now).forEach(x=>naItems.push({sev:'red',icon:NA_ICO.wrench,title:nm+' — '+x.type+' overdue',sub:'Was due '+x.nd,ci:i}));
-    // Insurance expiring soon / expired
-    if(car.insurance_due){const due=new Date(car.insurance_due);const days=Math.floor((due-now)/864e5);if(days<0)naItems.push({sev:'red',icon:NA_ICO.shield,title:nm+' — Insurance EXPIRED',sub:'Expired '+car.insurance_due,ci:i});else if(days<=30)naItems.push({sev:'amb',icon:NA_ICO.shield,title:nm+' — Insurance due in '+days+'d',sub:'Expires '+car.insurance_due,ci:i});}
-    // Registration expiring soon / expired
-    if(car.reg_due){const due=new Date(car.reg_due);const days=Math.floor((due-now)/864e5);if(days<0)naItems.push({sev:'red',icon:NA_ICO.doc,title:nm+' — Registration EXPIRED',sub:'Expired '+car.reg_due,ci:i});else if(days<=30)naItems.push({sev:'amb',icon:NA_ICO.doc,title:nm+' — Registration due in '+days+'d',sub:'Expires '+car.reg_due,ci:i});}
+    // Maintenance overdue (gated on maint pref)
+    if(_np.maint!==false)D.maint().filter(x=>x.ci==i&&x.nd&&new Date(x.nd)<now).forEach(x=>naItems.push({sev:'red',icon:NA_ICO.wrench,title:nm+' — '+x.type+' overdue',sub:'Was due '+x.nd,ci:i}));
+    // Insurance expiring soon / expired (gated on insurance pref)
+    if(_np.insurance!==false&&car.insurance_due){const due=new Date(car.insurance_due);const days=Math.floor((due-now)/864e5);if(days<0)naItems.push({sev:'red',icon:NA_ICO.shield,title:nm+' — Insurance EXPIRED',sub:'Expired '+car.insurance_due,ci:i});else if(days<=30)naItems.push({sev:'amb',icon:NA_ICO.shield,title:nm+' — Insurance due in '+days+'d',sub:'Expires '+car.insurance_due,ci:i});}
+    // Registration expiring soon / expired (gated on registration pref)
+    if(_np.registration!==false&&car.reg_due){const due=new Date(car.reg_due);const days=Math.floor((due-now)/864e5);if(days<0)naItems.push({sev:'red',icon:NA_ICO.doc,title:nm+' — Registration EXPIRED',sub:'Expired '+car.reg_due,ci:i});else if(days<=30)naItems.push({sev:'amb',icon:NA_ICO.doc,title:nm+' — Registration due in '+days+'d',sub:'Expires '+car.reg_due,ci:i});}
+    // Detail overdue >7 days (gated on detail pref)
+    if(_np.detail!==false){const dets=D.details().filter(d=>d.ci==i).sort((a,b)=>new Date(b.date)-new Date(a.date));const ddays=dets.length?Math.floor((now-new Date(dets[0].date))/864e5):999;if(ddays>14)naItems.push({sev:'amb',icon:NA_ICO.gear,title:nm+' — Detail overdue',sub:ddays===999?'Never detailed':ddays+'d since last detail',ci:i});}
     // Cars in service / offline
     if(car.op_status==='in_service')naItems.push({sev:'amb',icon:NA_ICO.gear,title:nm+' — In Service',sub:'Operational status: In Service',ci:i});
     if(car.op_status==='offline')naItems.push({sev:'amb',icon:NA_ICO.slash,title:nm+' — Offline',sub:'Vehicle marked offline',ci:i});
     // Recent incidents (last 30 days)
     D.incidents().filter(x=>x.ci==i&&x.date&&new Date(x.date)>=new Date(now.getTime()-30*864e5)).forEach(x=>naItems.push({sev:'red',icon:NA_ICO.alert,title:nm+' — Incident: '+x.type,sub:x.desc||x.date,ci:i}));
   });
+  // Surge event this month (gated on surge pref)
+  if(_np.surge!==false){const _sm=D.get('turoMkt','Las Vegas');const _sCal=(MARKETS&&MARKETS[_sm]&&MARKETS[_sm].surgeCal)||[];const _MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const _curMo=_MON[now.getMonth()];const _surgeNow=_sCal.find(s=>s[0]===_curMo);if(_surgeNow)naItems.unshift({sev:'amb',icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',title:'Surge Event This Month — '+_surgeNow[1],sub:'Boost your rates: '+_surgeNow[2],ci:-1});}
   const naH=naItems.length
     ?'<div class="sh reveal"><span class="sh-t" style="color:var(--red)">Needs Attention ('+naItems.length+')</span><span class="sh-l"></span></div>'
       +'<div class="reveal" style="margin-bottom:14px">'+naItems.map(it=>'<div class="na-item na-'+it.sev+'" onclick="sw(\'fleet\',null)"><span class="na-icon" style="color:'+(it.sev==='red'?'var(--red)':'var(--amb)')+'">'+it.icon+'</span><div><div class="na-title">'+it.title+'</div><div class="na-sub">'+it.sub+'</div></div></div>').join('')+'</div>'
@@ -2974,8 +2979,9 @@ function renderSet(){
     +'</div>'
 
     // NOTIFICATIONS
-    +'<div class="sh"><span class="sh-t">Notifications</span><span class="sh-l"></span></div>'
+    +'<div class="sh"><span class="sh-t">Dashboard Alerts</span><span class="sh-l"></span></div>'
     +'<div class="cd" id="notif-prefs">'
+    +'<div style="font-size:10px;color:var(--tx3);margin-bottom:10px;line-height:1.5">Controls which alerts appear in the Needs Attention section on your Dashboard.</div>'
     +renderNotifToggles()
     +'</div>'
 
@@ -2984,21 +2990,21 @@ function renderSet(){
     // RIGHT COLUMN
     +'<div>'
 
-    // APP INFO
-    +'<div class="sh" style="margin-top:0"><span class="sh-t">Application</span><span class="sh-l"></span></div>'
-    +'<div class="cd">'
-    +'<div class="cd-r"><span class="l">Version</span><span class="v">6.0</span></div>'
-    +'<div class="cd-r"><span class="l">Storage</span><span class="v">'+(CONFIGURED?'Supabase Cloud':'Local Device')+'</span></div>'
-    +'<div class="cd-r"><span class="l">Your Teams</span><span class="v">'+(SA?D.teams().length:getMyTeams().length)+'</span></div>'
-    +'<div class="cd-r"><span class="l">Vehicles</span><span class="v">'+D.fleet().length+'</span></div>'
-    +'<div class="cd-r"><span class="l">Trips Logged</span><span class="v">'+D.books().length+'</span></div>'
-    +'<div class="cd-r"><span class="l">Expenses Logged</span><span class="v">'+D.exps().length+'</span></div>'
+    // APP INFO — compact
+    +'<div class="sh" style="margin-top:0"><span class="sh-t">App Info</span><span class="sh-l"></span></div>'
+    +'<div class="cd" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div style="text-align:center;padding:8px;background:var(--sf);border-radius:6px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">'+D.fleet().length+'</div><div style="font-size:10px;color:var(--tx3)">Vehicles</div></div>'
+    +'<div style="text-align:center;padding:8px;background:var(--sf);border-radius:6px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--grn)">'+D.books().length+'</div><div style="font-size:10px;color:var(--tx3)">Trips</div></div>'
+    +'<div style="text-align:center;padding:8px;background:var(--sf);border-radius:6px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--red)">'+D.exps().length+'</div><div style="font-size:10px;color:var(--tx3)">Expenses</div></div>'
+    +'<div style="text-align:center;padding:8px;background:var(--sf);border-radius:6px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--tx2)">'+(SA?D.teams().length:getMyTeams().length)+'</div><div style="font-size:10px;color:var(--tx3)">Teams</div></div>'
     +'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'" style="font-size:10px">'+(CONFIGURED?'☁️ Supabase Cloud':'📱 Local Storage')+'</span></div>'
 
     // DATA MANAGEMENT
     +'<div class="sh"><span class="sh-t">Data Management</span><span class="sh-l"></span></div>'
+    +'<div style="background:var(--sf);border-radius:6px;padding:8px 12px;font-size:10px;color:var(--tx3);line-height:1.7;margin-bottom:10px">Export includes: vehicles, bookings, expenses, maintenance, detailing, fuels, washes, incidents, guests, work logs, pay history, activity log.</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
-    +'<button class="btn btn-o" onclick="exportAll()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export JSON</button>'
+    +'<button class="btn btn-o" onclick="exportAll()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export All Data</button>'
     +'<button class="btn btn-o" onclick="showM(\'csv\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Turo CSV</button>'
     +'</div>'
 
@@ -3351,10 +3357,27 @@ function importCSV(){
 
 // ── EXPORT ──
 function exportAll(){
-  const data={version:'6.0',exported:new Date().toISOString(),fleet:D.fleet(),expenses:D.exps(),bookings:D.books(),maintenance:D.maint(),detailing:D.details(),fuels:D.fuels(),washes:D.washes(),incidents:D.incidents(),guests:D.guests(),activity:D.activity().slice(0,50)};
+  const tk=D.tk;
+  const data={
+    exported:new Date().toISOString(),
+    fleet:D.fleet(),
+    expenses:D.exps(),
+    bookings:D.books(),
+    maintenance:D.maint(),
+    detailing:D.details(),
+    fuels:D.fuels(),
+    washes:D.washes(),
+    incidents:D.incidents(),
+    guests:D.guests(),
+    worklog:D.get(D.tk('worklog'),[]),
+    payhistory:D.get(D.tk('payhistory'),{}),
+    payrates:D.get(D.tk('payrates'),{}),
+    revImports:D.revImports()||[],
+    activity:D.activity().slice(0,100)
+  };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='fleet-manager-export-'+today()+'.json';a.click();URL.revokeObjectURL(url);
-  logAct('Data Exported');toast('Exported!');
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='fleet-export-'+today()+'.json';a.click();URL.revokeObjectURL(url);
+  logAct('Data Exported');toast('Exported — '+Object.keys(data).length+' data categories');
 }
 
 // ── COMMAND PALETTE ──
