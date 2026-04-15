@@ -393,6 +393,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div id="pg-vin" class="pg"></div>
 <div id="pg-fleet" class="pg"></div>
 <div id="pg-cal" class="pg"></div>
+<div id="pg-work" class="pg"></div>
 <div id="pg-fin" class="pg"></div>
 <div id="pg-admin" class="pg"></div>
 <div id="pg-set" class="pg"></div>
@@ -403,6 +404,8 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="mo" id="m-detail"><div class="ml" id="ml-detail"></div></div>
 <div class="mo" id="m-fuel"><div class="ml" id="ml-fuel"></div></div>
 <div class="mo" id="m-wash"><div class="ml" id="ml-wash"></div></div>
+<div class="mo" id="m-work"><div class="ml" id="ml-work"></div></div>
+<div class="mo" id="m-payrate"><div class="ml" id="ml-payrate"></div></div>
 <div class="mo" id="m-incident"><div class="ml" id="ml-incident"></div></div>
 <div class="mo" id="m-guest"><div class="ml" id="ml-guest"></div></div>
 <div class="mo" id="m-revenue"><div class="ml" id="ml-revenue" style="max-width:580px"></div></div>
@@ -1264,11 +1267,12 @@ function getTabs(){
     {id:'vin',label:'VIN Lookup',icon:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>'},
     {id:'fleet',label:'Fleet',icon:'<svg viewBox="0 0 24 24"><path d="M5 11l1.5-4.5h11L19 11M3 15h18v-4H3v4zm2 4h4v-2H5v2zm10 0h4v-2h-4v2z"/></svg>'},
     {id:'cal',label:'Calendar',icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/></svg>'},
+    {id:'work',label:'Work Log',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>'},
     {id:'fin',label:'Finances',icon:'<svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'},
   ];
   let tabs;
-  if(role==='accountant') tabs=base.filter(t=>['dash','fin'].includes(t.id));
-  else if(['detailer','mechanic','delivery_driver'].includes(role)) tabs=base.filter(t=>['dash','fleet','cal'].includes(t.id));
+  if(role==='accountant') tabs=base.filter(t=>['dash','work','fin'].includes(t.id));
+  else if(['detailer','mechanic','delivery_driver'].includes(role)) tabs=base.filter(t=>['dash','fleet','cal','work'].includes(t.id));
   else tabs=[...base];
   // Admin moved into Settings sub-tab
   tabs.push({id:'set',label:'Settings',icon:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'});
@@ -1289,7 +1293,7 @@ function sw(id,btn){
   const nb=document.querySelectorAll('.nl button'),mb=document.querySelectorAll('.mn button');
   const idx=map[id];if(nb[idx])nb[idx].classList.add('a');if(mb[idx])mb[idx].classList.add('a');
   if(id==='dash')renderDash();if(id==='fleet')renderFleet();if(id==='cal')renderCal();
-  if(id==='fin')renderFin();if(id==='admin')renderAdmin();if(id==='set')renderSet();
+  if(id==='fin')renderFin();if(id==='work')renderWork();if(id==='admin')renderAdmin();if(id==='set')renderSet();
   document.getElementById('np').classList.remove('show');closeTDD();
 }
 
@@ -1312,7 +1316,7 @@ document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.
 let revChart=null;
 function renderDash(){
   if(!CT&&!SA){
-    document.getElementById('pg-dash').innerHTML='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 11l1.5-4.5h11L19 11M3 15h18v-4H3v4zm2 4h4v-2H5v2zm10 0h4v-2h-4v2z"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Team Selected</div><div style="font-size:12px;color:var(--tx2);margin-bottom:22px;line-height:1.6">Create a team to manage your fleet.</div><button class="btn btn-r" onclick="showNewTeam()">Create a Team</button></div>';
+    document.getElementById('pg-dash').innerHTML='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="64" height="42" viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 C4 31 5 32 6 32 L12 32 M20 32 L44 32 M52 32 L58 32 C59 32 60 31 60 30 L60 26 Z"/><circle cx="16" cy="32" r="5"/><circle cx="48" cy="32" r="5"/><path d="M22 14 C20 14 17 18 16 22 L48 22 C47 18 44 12 40 10"/><line x1="32" y1="13" x2="31" y2="22"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Team Selected</div><div style="font-size:12px;color:var(--tx2);margin-bottom:22px;line-height:1.6">Create a team to manage your fleet.</div><button class="btn btn-r" onclick="showNewTeam()">Create a Team</button></div>';
     return;
   }
   const f=D.fleet(),e=D.exps(),b=D.books(),m=D.maint();
@@ -1850,7 +1854,7 @@ function addFromVIN(){
 function renderFleet(){
   const f=D.fleet();
   let html='<div class="sh"><span class="sh-t">My Fleet ('+f.length+')</span><span class="sh-l"></span>'+(canEdit()?'<span class="sh-a" onclick="showM(\'vehicle\')">+ Add Vehicle</span>':'')+'</div>';
-  if(!f.length){html+='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 11l1.5-4.5h11L19 11M3 15h18v-4H3v4zm2 4h4v-2H5v2zm10 0h4v-2h-4v2z"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:18px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Vehicles Yet</div><div style="font-size:12px;color:var(--tx2);margin-bottom:20px">Add your first vehicle or decode a VIN to get started.</div>'+(canEdit()?'<button class="btn btn-r" onclick="showM(\'vehicle\')">+ Add Vehicle</button>':'')+'</div>';}
+  if(!f.length){html+='<div style="text-align:center;padding:60px 20px"><div style="margin-bottom:14px;color:var(--acc2);opacity:.45"><svg width="64" height="42" viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 C4 31 5 32 6 32 L12 32 M20 32 L44 32 M52 32 L58 32 C59 32 60 31 60 30 L60 26 Z"/><circle cx="16" cy="32" r="5"/><circle cx="48" cy="32" r="5"/><path d="M22 14 C20 14 17 18 16 22 L48 22 C47 18 44 12 40 10"/><line x1="32" y1="13" x2="31" y2="22"/></svg></div><div style="font-family:\'Rajdhani\',sans-serif;font-size:18px;font-weight:700;color:var(--acc2);margin-bottom:8px">No Vehicles Yet</div><div style="font-size:12px;color:var(--tx2);margin-bottom:20px">Add your first vehicle or decode a VIN to get started.</div>'+(canEdit()?'<button class="btn btn-r" onclick="showM(\'vehicle\')">+ Add Vehicle</button>':'')+'</div>';}
   else{
     html+='<div class="fg-auto">';
     f.forEach((v,i)=>{
@@ -2128,6 +2132,187 @@ function renderCal(){
     +'<div class="sh" style="margin-top:18px"><span class="sh-t">2026 Las Vegas Surge Calendar</span><span class="sh-l"></span></div>'
     +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:10px;line-height:1.6">Raise your Turo rates during these events. Multiply your base rate by the suggested multiplier.</div>'
     +Object.entries(SURGE_EVENTS).flatMap(([ym,evts])=>evts.map(e=>'<div class="surge-ev"><div class="se-name">'+e.name+'</div><div class="se-meta">'+ym+'-'+e.d+' &middot; Recommended: <strong style="color:var(--sa)">'+e.mult+' base rate</strong></div></div>')).join('')+'</div>';
+}
+
+// ── WORK LOG ──
+function renderWork(){
+  const wl=D.get(D.tk('worklog'),[]);
+  const rates=D.get(D.tk('payrates'),{});
+  const f=D.fleet();
+  const myRole=teamRole();
+  const isWorker=['detailer','mechanic','delivery_driver','employee'].includes(myRole);
+  const canManage=isMgr()||SA;
+  const now=new Date();
+  const tm=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+  const entries=canManage?wl:wl.filter(e=>e.uid===CU?.id);
+  const myEntries=wl.filter(e=>e.uid===CU?.id);
+  const fmtType=t=>({detailing:'Detailing',maintenance:'Maintenance',delivery:'Delivery',wash:'Car Wash',other:'Other'}[t]||t);
+  const typeCol=t=>({detailing:'var(--acc2)',maintenance:'var(--amb)',delivery:'var(--grn)',wash:'#6ab4d4',other:'var(--tx2)'}[t]||'var(--tx2)');
+  const calcPay=(e)=>{const r=rates[e.uid]||{};return Math.round(((e.hours||0)*(r.hourly||0))+((e.jobs||0)*(r.perjob||0)));};
+
+  let H='<div class="sh"><span class="sh-t">Work Log</span><span class="sh-l"></span>'+(isWorker||canManage?'<span class="sh-a" onclick="showWorkModal()">+ Log Work</span>':'')+'</div>';
+
+  // ── EMPLOYEE: my summary + my entries ──
+  if(isWorker&&!canManage){
+    const mMine=myEntries.filter(e=>e.date&&e.date.startsWith(tm));
+    const mHrs=mMine.reduce((s,e)=>s+(Number(e.hours)||0),0);
+    const mJobs=mMine.reduce((s,e)=>s+(Number(e.jobs)||0),0);
+    const mPay=mMine.reduce((s,e)=>s+calcPay(e),0);
+    const r=rates[CU?.id]||{};
+    H+='<div class="g3" style="margin-bottom:14px">'
+      +'<div class="sc"><div class="sc-sub">Hours This Month</div><div class="sc-val">'+mHrs.toFixed(1)+'</div><div class="sc-lbl">Logged</div></div>'
+      +'<div class="sc"><div class="sc-sub">Jobs This Month</div><div class="sc-val">'+mJobs+'</div><div class="sc-lbl">Completed</div></div>'
+      +'<div class="sc"><div class="sc-sub">Est. Pay</div><div class="sc-val grn">'+(mPay>0?fmt$(mPay):(r.hourly||r.perjob)?fmt$(mPay):'—')+'</div><div class="sc-lbl">'+(r.hourly||r.perjob?'This Month':'Rate not set')+'</div></div>'
+      +'</div>';
+    if(!myEntries.length){H+='<div class="empty" style="padding:40px 0">No entries yet — tap + Log Work to get started</div>';}
+    else{
+      H+='<div class="lc">';
+      myEntries.slice().reverse().forEach(e=>{
+        const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
+        const pay=calcPay(e);
+        H+='<div style="padding:10px 12px;border-bottom:1px solid var(--bd)">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+          +'<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+typeCol(e.type)+'">'+fmtType(e.type).toUpperCase()+'</span>'
+          +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
+          +(veh?'<span style="font-size:11px;color:var(--tx3)">• '+veh+'</span>':'')
+          +'<span class="badge '+(e.status==='approved'?'b-g':e.status==='rejected'?'b-red':'b-a')+'" style="margin-left:auto">'+e.status+'</span>'
+          +'</div>'
+          +'<div style="display:flex;gap:16px;font-size:11px;color:var(--tx2)">'
+          +(e.hours?'<span>'+e.hours+' hrs</span>':'')
+          +(e.jobs?'<span>'+e.jobs+' job'+(e.jobs>1?'s':'')+'</span>':'')
+          +(pay>0?'<span style="color:var(--grn)">'+fmt$(pay)+'</span>':'')
+          +'</div>'
+          +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:3px">'+e.notes+'</div>':'')
+          +'</div>';
+      });
+      H+='</div>';
+    }
+  }
+
+  // ── MANAGER/OWNER: team overview ──
+  if(canManage){
+    // Per-employee summary cards
+    const byUser={};
+    wl.filter(e=>e.date&&e.date.startsWith(tm)).forEach(e=>{
+      if(!byUser[e.uid])byUser[e.uid]={uname:e.uname,urole:e.urole,uid:e.uid,hrs:0,jobs:0,pending:0};
+      byUser[e.uid].hrs+=Number(e.hours)||0;
+      byUser[e.uid].jobs+=Number(e.jobs)||0;
+      if(e.status==='pending')byUser[e.uid].pending++;
+    });
+    const userSummaries=Object.values(byUser);
+    if(userSummaries.length){
+      H+='<div class="sh" style="margin-top:0"><span class="sh-t">This Month — Team Summary</span><span class="sh-l"></span></div>';
+      H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:18px">';
+      userSummaries.forEach(u=>{
+        const r=rates[u.uid]||{};const pay=Math.round((u.hrs*(r.hourly||0))+(u.jobs*(r.perjob||0)));
+        H+='<div class="cd" style="padding:12px">'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+          +'<div><div style="font-weight:600;font-size:13px">'+u.uname+'</div><div style="font-size:10px;color:var(--tx3);text-transform:capitalize">'+u.urole+'</div></div>'
+          +(u.pending?'<span class="badge b-a">'+u.pending+' pending</span>':'<span class="badge b-g">All clear</span>')
+          +'</div>'
+          +'<div style="display:flex;gap:12px;font-size:11px;color:var(--tx2);margin-bottom:8px">'
+          +'<span><strong style="color:var(--tx1)">'+u.hrs.toFixed(1)+'</strong> hrs</span>'
+          +'<span><strong style="color:var(--tx1)">'+u.jobs+'</strong> jobs</span>'
+          +(pay>0?'<span><strong style="color:var(--grn)">'+fmt$(pay)+'</strong> est.</span>':'')
+          +'</div>'
+          +'<button class="btn btn-o btn-s btn-f" onclick="showPayRateModal(\''+u.uid+'\',\''+u.uname+'\')">Set Pay Rate</button>'
+          +'</div>';
+      });
+      H+='</div>';
+    }
+
+    // All entries table
+    H+='<div class="sh"><span class="sh-t">All Entries ('+entries.length+')</span><span class="sh-l"></span></div>';
+    if(!entries.length){H+='<div class="empty" style="padding:32px 0">No work logged yet</div>';}
+    else{
+      H+='<div class="lc">';
+      entries.slice().reverse().forEach((e,ri)=>{
+        const idx=wl.indexOf(e);
+        const veh=e.ci>=0&&f[e.ci]?f[e.ci].year+' '+f[e.ci].make+' '+f[e.ci].model:'';
+        const pay=calcPay(e);
+        H+='<div style="padding:10px 12px;border-bottom:1px solid var(--bd)">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<span style="font-weight:600;font-size:12px">'+e.uname+'</span>'
+          +'<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+typeCol(e.type)+'">'+fmtType(e.type).toUpperCase()+'</span>'
+          +'<span style="font-size:11px;color:var(--tx3)">'+e.date+'</span>'
+          +(veh?'<span style="font-size:11px;color:var(--tx3)">• '+veh+'</span>':'')
+          +'<div style="margin-left:auto;display:flex;align-items:center;gap:6px">'
+          +(e.status==='pending'?'<button class="btn btn-g btn-s" onclick="approveWork('+idx+',\'approved\')">Approve</button><button class="btn btn-red btn-s" onclick="approveWork('+idx+',\'rejected\')">Reject</button>':'<span class="badge '+(e.status==='approved'?'b-g':'b-red')+'">'+e.status+'</span>')
+          +'</div>'
+          +'</div>'
+          +'<div style="display:flex;gap:16px;font-size:11px;color:var(--tx2);margin-top:4px">'
+          +(e.hours?'<span>'+e.hours+' hrs</span>':'')
+          +(e.jobs?'<span>'+e.jobs+' job'+(e.jobs>1?'s':'')+'</span>':'')
+          +(pay>0?'<span style="color:var(--grn)">'+fmt$(pay)+' est.</span>':'')
+          +(e.notes?'<span style="color:var(--tx3)">'+e.notes+'</span>':'')
+          +'</div>'
+          +'</div>';
+      });
+      H+='</div>';
+    }
+  }
+
+  document.getElementById('pg-work').innerHTML=H;
+}
+
+function showWorkModal(){
+  populateDD();
+  const td=new Date().toISOString().split('T')[0];
+  document.getElementById('wl-dt').value=td;
+  document.getElementById('wl-hrs').value='';
+  document.getElementById('wl-jobs').value='';
+  document.getElementById('wl-notes').value='';
+  showM('work');
+}
+
+function saveWork(){
+  const dt=document.getElementById('wl-dt').value;
+  const type=document.getElementById('wl-type').value;
+  const ci=parseInt(document.getElementById('wl-car').value)||−1;
+  const hrs=parseFloat(document.getElementById('wl-hrs').value)||0;
+  const jobs=parseInt(document.getElementById('wl-jobs').value)||0;
+  const notes=document.getElementById('wl-notes').value.trim();
+  if(!dt){toast('Please enter a date');return;}
+  if(!hrs&&!jobs){toast('Enter hours worked or jobs completed');return;}
+  const entry={id:Date.now().toString(),uid:CU?.id||'anon',uname:CU?.name||CU?.email||'Unknown',urole:teamRole(),type,ci,hours:hrs,jobs,date:dt,notes,status:'pending'};
+  const wl=D.get(D.tk('worklog'),[]);
+  wl.push(entry);
+  D.set(D.tk('worklog'),wl);
+  logAct('Work Logged',fmtWorkType(type)+' — '+hrs+'hrs / '+jobs+'jobs');
+  hideM();toast('Work entry saved');
+  renderWork();
+}
+
+function fmtWorkType(t){return{detailing:'Detailing',maintenance:'Maintenance',delivery:'Delivery',wash:'Car Wash',other:'Other'}[t]||t;}
+
+function approveWork(idx,status){
+  const wl=D.get(D.tk('worklog'),[]);
+  if(!wl[idx])return;
+  wl[idx].status=status;
+  D.set(D.tk('worklog'),wl);
+  toast(status==='approved'?'Entry approved':'Entry rejected');
+  renderWork();
+}
+
+function showPayRateModal(uid,uname){
+  const rates=D.get(D.tk('payrates'),{});
+  const r=rates[uid]||{};
+  document.getElementById('pr-name').textContent=uname;
+  document.getElementById('pr-uid').value=uid;
+  document.getElementById('pr-hrly').value=r.hourly||'';
+  document.getElementById('pr-job').value=r.perjob||'';
+  showM('payrate');
+}
+
+function savePayRate(){
+  const uid=document.getElementById('pr-uid').value;
+  const hrly=parseFloat(document.getElementById('pr-hrly').value)||0;
+  const perjob=parseFloat(document.getElementById('pr-job').value)||0;
+  const rates=D.get(D.tk('payrates'),{});
+  rates[uid]={hourly:hrly,perjob};
+  D.set(D.tk('payrates'),rates);
+  hideM();toast('Pay rate saved');
+  renderWork();
 }
 
 // ── FINANCES ──
@@ -2519,6 +2704,10 @@ function buildModals(){
   document.getElementById('ml-detail').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Detailing</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="d-car"></select></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="d-dt"></div><div class="fg"><label class="fl">Condition After</label><select class="fi" id="d-cond"><option value="Showroom">Showroom &mdash; Perfect</option><option value="Clean" selected>Clean &mdash; Very Good</option><option value="Good">Good &mdash; Minor Issues</option><option value="Fair">Fair &mdash; Needs Attention</option></select></div><div class="fg"><label class="fl">Detailed By</label><input type="text" class="fi" id="d-by" placeholder="Name or company"></div><div class="fg"><label class="fl">Cost ($)</label><input type="number" class="fi" id="d-cost" placeholder="Optional"></div><div class="fg"><label class="fl">Notes</label><input type="text" class="fi" id="d-nt" placeholder="Interior, exterior, etc."></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveDetail()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
   document.getElementById('ml-fuel').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Fuel</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="f-car"></select></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="f-dt"></div><div class="fg"><label class="fl">Gallons</label><input type="number" class="fi" id="f-gal" placeholder="e.g. 12.5" step="0.1"></div><div class="fg"><label class="fl">Price Per Gallon ($)</label><input type="number" class="fi" id="f-ppg" placeholder="e.g. 4.25" step="0.01"></div><div class="fg"><label class="fl">Odometer (miles)</label><input type="number" class="fi" id="f-odo" placeholder="Current mileage"></div><div class="fg"><label class="fl">Miles Since Last Fill</label><input type="number" class="fi" id="f-mi" placeholder="e.g. 250"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveFuel()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+
+  document.getElementById('ml-work').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Work</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="wl-dt"></div><div class="fg"><label class="fl">Work Type</label><select class="fi" id="wl-type"><option value="detailing">Detailing</option><option value="maintenance">Maintenance</option><option value="delivery">Delivery / Transport</option><option value="wash">Car Wash</option><option value="other">Other</option></select></div><div class="fg"><label class="fl">Vehicle (optional)</label><select class="fi car-dd" id="wl-car"><option value="-1">— No specific vehicle —</option></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="fg"><label class="fl">Hours Worked</label><input type="number" class="fi" id="wl-hrs" placeholder="e.g. 3.5" step="0.5" min="0"></div><div class="fg"><label class="fl">Jobs Completed</label><input type="number" class="fi" id="wl-jobs" placeholder="e.g. 1" min="0"></div></div><div class="fg"><label class="fl">Notes</label><textarea class="fi" id="wl-notes" placeholder="What was done, any details..." rows="3" style="resize:vertical"></textarea></div><div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-r btn-f" onclick="saveWork()">Save Entry</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+
+  document.getElementById('ml-payrate').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Set Pay Rate</span><span class="sh-l"></span></div><div id="pr-name" style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--tx2)"></div><div class="fg"><label class="fl">Hourly Rate ($/hr)</label><input type="number" class="fi" id="pr-hrly" placeholder="e.g. 25.00" step="0.50" min="0"></div><div class="fg"><label class="fl">Per-Job Rate ($/job)</label><input type="number" class="fi" id="pr-job" placeholder="e.g. 40.00" step="0.50" min="0"></div><div style="font-size:11px;color:var(--tx3);margin-bottom:12px;line-height:1.6">Set one or both. Pay is calculated: (hours × hourly rate) + (jobs × per-job rate).</div><input type="hidden" id="pr-uid"><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="savePayRate()">Save Rate</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
   document.getElementById('ml-wash').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Log Car Wash</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Vehicle</label><select class="fi car-dd" id="w-car"></select></div><div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="w-dt"></div><div class="fg"><label class="fl">Type</label><select class="fi" id="w-type"><option>Basic Wash</option><option>Full Service</option><option>Interior Only</option><option>Exterior Only</option><option>Hand Wash</option></select></div><div class="fg"><label class="fl">Cost ($)</label><input type="number" class="fi" id="w-cost" placeholder="Optional"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveWash()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
 
