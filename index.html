@@ -408,6 +408,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 </div>
 <div id="pg-dash" class="pg a"></div>
 <div id="pg-vin" class="pg"></div>
+<div id="pg-watch" class="pg"></div>
 <div id="pg-fleet" class="pg"></div>
 <div id="pg-cal" class="pg"></div>
 <div id="pg-work" class="pg"></div>
@@ -1253,6 +1254,23 @@ function launch(){
     if(nr)nr.textContent=SA?'Super Admin':isDev(CU.email)?'Developer':(teamRole()||'--');
   }
   updateNavTeam();buildNav();buildModals();renderVin();renderDash();
+  // Auto-decode if opened with a share-link hash: #vin=XXX&miles=YYY&ask=ZZZ&zip=AAAA
+  if(location.hash&&location.hash.includes('vin=')){
+    try{
+      const p=new URLSearchParams(location.hash.slice(1));
+      const v=p.get('vin');
+      if(v&&v.length===17){
+        sw('vin',null);
+        setTimeout(()=>{
+          const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null)el.value=val;};
+          set('vin-i',v);set('mi-i',p.get('miles')||'');set('pp-i',p.get('ask')||'');set('zi-i',p.get('zip')||'89014');
+          if(typeof lookupVIN==='function')lookupVIN();
+        },250);
+      }
+    }catch(_){}
+  }
+  // Initial watchlist badge count
+  setTimeout(()=>{if(typeof _updateWatchBadge==='function')_updateWatchBadge();},300);
   setDateFields();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
   setTimeout(chkAlerts,1200);updNDot();
@@ -1279,13 +1297,14 @@ function getTabs(){
   const base=[
     {id:'dash',label:'Dashboard',icon:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'},
     {id:'vin',label:'VIN Lookup',icon:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>'},
+    {id:'watch',label:'Watchlist',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'},
     {id:'fleet',label:'Fleet',icon:'<svg viewBox="0 0 24 24"><path d="M5 11l1.5-4.5h11L19 11M3 15h18v-4H3v4zm2 4h4v-2H5v2zm10 0h4v-2h-4v2z"/></svg>'},
     {id:'cal',label:'Calendar',icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/></svg>'},
     (FEATURES.worklog?{id:'work',label:'Work Log',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>'}:null),
     {id:'fin',label:'Finances',icon:'<svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'},
   ].filter(Boolean);
   let tabs;
-  if(role==='accountant') tabs=base.filter(t=>['dash','work','fin'].includes(t.id));
+  if(role==='accountant') tabs=base.filter(t=>['dash','watch','work','fin'].includes(t.id));
   else if(['detailer','mechanic','delivery_driver'].includes(role)) tabs=base.filter(t=>['dash','fleet','cal','work'].includes(t.id));
   else tabs=[...base];
   // Admin moved into Settings sub-tab
@@ -1308,6 +1327,8 @@ function sw(id,btn){
   const idx=map[id];if(nb[idx])nb[idx].classList.add('a');if(mb[idx])mb[idx].classList.add('a');
   if(id==='dash')renderDash();if(id==='fleet')renderFleet();if(id==='cal')renderCal();
   if(id==='fin')renderFin();if(id==='work')renderWork();if(id==='admin')renderAdmin();if(id==='set')renderSet();
+  if(id==='vin'&&typeof renderVin==='function'&&!document.getElementById('pg-vin').innerHTML.trim())renderVin();
+  if(id==='watch'&&typeof renderWatchPage==='function')renderWatchPage();
   document.getElementById('np').classList.remove('show');closeTDD();
 }
 
@@ -1522,7 +1543,7 @@ function renderDash(){
     +'<div class="reveal" style="display:flex;gap:8px;flex-wrap:wrap">'
     +'<button class="btn btn-r" onclick="sw(\'vin\',null)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>Decode VIN</button>'
     +(canEdit()?'<button class="btn btn-o" onclick="showM(\'vehicle\')">+ Add Vehicle</button><button class="btn btn-o" onclick="showM(\'booking\')">+ Log Trip</button><button class="btn btn-o" onclick="showM(\'expense\')">+ Log Expense</button><button class="btn btn-o" onclick="showM(\'detail\')">+ Log Detail</button>':'')
-    +'<button class="btn btn-o" onclick="showM(\'watchlist\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Watchlist</button>'
+    +'<button class="btn btn-o" onclick="sw(\'watch\',null)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Watchlist</button>'
     +'<button class="btn btn-o" onclick="showM(\'nextcar\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Next Car</button>'
     +'<button class="btn btn-o" onclick="showM(\'cashflow\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>30d Cashflow</button>'
     +'<button class="btn btn-o" onclick="exportAll()">Export Data</button>'
@@ -1846,8 +1867,7 @@ async function lookupVIN(){
       +'</div>'
       +'<div style="margin-top:12px;padding-top:12px;border-top:1px solid '+qBorder+';display:flex;gap:8px;flex-wrap:wrap">'
       +(canEdit()?'<button class="btn btn-r" onclick="addFromVIN()">+ Add to Fleet</button>':'')
-      +'<button class="btn btn-o" onclick="saveVINToWatchlist()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Save to Watchlist</button>'
-      +'<button class="btn btn-o" onclick="showM(\'watchlist\')">&#128188; Open Watchlist</button>'
+      +'<button id="vin-save-btn-top" class="btn btn-o" onclick="saveVINToWatchlist()">'+_saveBtnHTML(vin)+'</button>'
       +'</div>'
       +'</div>';
 
@@ -2141,7 +2161,17 @@ async function lookupVIN(){
       +'<a class="rl" href="https://www.autocheck.com/vehiclehistory/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="AutoCheck history \u2014 VIN copied for paste">AutoCheck</a>'
       +'<a class="rl" href="https://vpic.nhtsa.dot.gov/decoder/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="NHTSA VIN decoder \u2014 VIN copied for paste">vPIC Decoder</a>'
       +'</div>';
-    H+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">'+(canEdit()?'<button class="btn btn-o" onclick="addFromVIN()">+ Add to Fleet</button>':'')+'</div>';
+    // ── SAVE / EXPORT ACTION BAR (bottom of report) ──
+    H+='<div class="sh"><span class="sh-t">Save &amp; Export</span><span class="sh-l"></span></div>';
+    H+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:24px">'
+      +'<div style="font-size:11px;color:var(--tx2);margin-bottom:10px;line-height:1.5">Save this analysis to your watchlist to review later, export as PDF to bring to the dealer, or download as HTML to open in Google Docs.</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button id="vin-save-btn-btm" class="btn btn-r" onclick="saveVINToWatchlist()">'+_saveBtnHTML(vin)+'</button>'
+      +'<button class="btn btn-o" onclick="exportCurrentVINPDF()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Save to PDF</button>'
+      +'<button class="btn btn-o" onclick="exportCurrentVINDoc()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Save to Google Doc</button>'
+      +'<button class="btn btn-o" onclick="copyCurrentVINLink()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copy Share Link</button>'
+      +(canEdit()?'<button class="btn btn-o" onclick="addFromVIN()" style="margin-left:auto">+ Add to Fleet</button>':'')
+      +'</div></div>';
 
     document.getElementById('vin-res').innerHTML=H;
     document.getElementById('vin-res').style.display='block';
@@ -4098,6 +4128,21 @@ function renderCashflowForecast(){
 }
 
 // ── SAVED CARS / WATCHLIST ──
+// Renders the save-button inner HTML based on whether the VIN is already saved.
+// Solid bookmark = already in watchlist; outline bookmark = not yet saved.
+function _saveBtnHTML(vin){
+  const isSaved=(D.savedCars()||[]).some(w=>w.snapshot&&w.snapshot.vin===vin);
+  if(isSaved)return '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Saved \u2713';
+  return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Save to Watchlist';
+}
+// Refresh both save-button variants (top + bottom) in the currently rendered VIN report.
+function _refreshSaveBtns(){
+  const vin=(window._vinSnap||{}).vin;if(!vin)return;
+  const html=_saveBtnHTML(vin);
+  const a=document.getElementById('vin-save-btn-top');if(a)a.innerHTML=html;
+  const b=document.getElementById('vin-save-btn-btm');if(b)b.innerHTML=html;
+}
+
 // Generates vehicle-specific negotiation tips from the snapshot data.
 // Returns an array of tip strings ordered by leverage strength.
 function _buildNegotiationTips(s){
@@ -4149,6 +4194,25 @@ function saveVINToWatchlist(){
   else{list.unshift(entry);toast('Saved to Watchlist \u2014 '+s.vName);}
   D.sSavedCars(list);
   if(typeof logAct==='function')logAct('Watchlist',(existingIdx>=0?'Updated ':'Saved ')+s.vName);
+  _refreshSaveBtns();
+  if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
+  // Update the Watchlist nav badge if visible
+  _updateWatchBadge();
+}
+function _updateWatchBadge(){
+  const count=(D.savedCars()||[]).length;
+  document.querySelectorAll('.nl button,.mn button').forEach(b=>{
+    const t=b.querySelector('.nav-lbl,[class*="lbl"]');
+    const txt=b.textContent||'';
+    if(/Watchlist/i.test(txt)){
+      // Toggle badge dot
+      const existing=b.querySelector('.watch-badge');
+      if(count>0){
+        if(existing)existing.textContent=count;
+        else{const sp=document.createElement('span');sp.className='watch-badge';sp.textContent=count;sp.style.cssText='position:absolute;top:4px;right:6px;background:var(--acc2);color:#0a0a0a;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;font-family:\'Plus Jakarta Sans\',sans-serif';b.style.position='relative';b.appendChild(sp);}
+      }else if(existing)existing.remove();
+    }
+  });
 }
 
 function renderWatchlist(){
@@ -4195,17 +4259,124 @@ function renderWatchlist(){
   el.innerHTML=H;
 }
 
+// Renders the Watchlist as a full TAB page (not a modal). Same card layout.
+function renderWatchPage(){
+  const el=document.getElementById('pg-watch');if(!el)return;
+  const list=D.savedCars()||[];
+  let H='<div class="sh"><span class="sh-t">Watchlist &mdash; Saved Cars</span><span class="sh-l"></span>'
+    +'<span style="font-size:11px;color:var(--tx3);margin-left:8px">'+list.length+' saved</span>'
+    +'<span class="sh-a" onclick="sw(\'vin\',null)">+ Decode a VIN</span></div>';
+  if(!list.length){
+    H+='<div class="empty" style="padding:60px 20px"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><div class="t">No cars saved yet</div><div>Decode a VIN in VIN Lookup and click <strong>Save to Watchlist</strong> to track cars you\'re considering.</div><button class="btn btn-r" onclick="sw(\'vin\',null)" style="margin-top:12px">Decode a VIN</button></div>';
+  } else {
+    // Filter pills by status
+    H+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:11px">';
+    ['all','considering','bought','passed'].forEach(f=>{
+      const n=f==='all'?list.length:list.filter(w=>(w.status||'considering')===f).length;
+      const act=(window._watchFilter||'all')===f;
+      H+='<button onclick="_watchFilter=\''+f+'\';renderWatchPage()" style="padding:5px 12px;border-radius:16px;border:1px solid rgba(181,136,99,'+(act?'.6':'.2')+');background:'+(act?'rgba(181,136,99,.15)':'transparent')+';color:'+(act?'var(--acc2)':'var(--tx2)')+';font-size:11px;font-weight:600;cursor:pointer;font-family:\'Plus Jakarta Sans\',sans-serif">'+f.charAt(0).toUpperCase()+f.slice(1)+' &middot; '+n+'</button>';
+    });
+    H+='</div>';
+    const filt=window._watchFilter||'all';
+    const visible=filt==='all'?list:list.filter(w=>(w.status||'considering')===filt);
+    H+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">';
+    visible.forEach(w=>{
+      const s=w.snapshot||{};
+      const verdictColor=s.verdict==='WORTH PURSUING'?'var(--grn)':s.verdict==='WALK'?'var(--red)':'var(--amb)';
+      const verdictBg=s.verdict==='WORTH PURSUING'?'rgba(109,186,125,.12)':s.verdict==='WALK'?'rgba(196,122,106,.12)':'rgba(224,159,62,.12)';
+      const statusDot=w.status==='bought'?'<span style="background:var(--grn);color:#0a0a0a;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">BOUGHT</span>':w.status==='passed'?'<span style="background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">PASSED</span>':'';
+      H+='<div class="cd reveal" style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+        +'<div style="flex:1;min-width:200px"><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--tx);cursor:pointer" onclick="openSavedCarInVIN(\''+w.id+'\')">'+esc(s.vName||'Vehicle')+statusDot+'</div>'
+        +'<div style="font-size:10px;color:var(--tx3);margin-top:2px">VIN '+esc(s.vin||'')+' &middot; '+(s.miles||0).toLocaleString()+' mi</div>'
+        +'<div style="font-size:9px;color:var(--tx3);margin-top:1px">Saved '+(w.savedAt||'').slice(0,10)+(w.updatedAt&&w.updatedAt!==w.savedAt?' &middot; Updated '+w.updatedAt.slice(0,10):'')+'</div></div>'
+        +'<span style="background:'+verdictBg+';color:'+verdictColor+';font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;letter-spacing:1px;white-space:nowrap">'+esc(s.verdict||'?')+'</span>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;font-size:10px">'
+        +'<div><div style="color:var(--tx3)">Asking</div><strong>'+fmt$(s.askPrice)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Target</div><strong style="color:var(--grn)">'+fmt$(s.tgt)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Walk</div><strong style="color:var(--red)">'+fmt$(s.wk)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Profit/mo</div><strong style="color:'+(s.profitMonth>0?'var(--grn)':'var(--red)')+'">'+fmt$(s.profitMonth)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Risk</div><strong>'+(s.riskScore||'?')+'/10</strong></div>'
+        +'<div><div style="color:var(--tx3)">Break-even</div><strong>'+(s.breakEvenMonths||'?')+' mo</strong></div>'
+        +'</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        +'<button class="btn btn-r btn-s" onclick="openSavedCarInVIN(\''+w.id+'\')">Open Full Report</button>'
+        +'<button class="btn btn-o btn-s" onclick="exportWatchlistPDF(\''+w.id+'\')">PDF</button>'
+        +'<button class="btn btn-o btn-s" onclick="exportWatchlistDoc(\''+w.id+'\')">Doc</button>'
+        +(canEdit()?'<button class="btn btn-o btn-s" onclick="addWatchlistToFleet(\''+w.id+'\')">+ Fleet</button>':'')
+        +(w.status!=='bought'?'<button class="btn btn-o btn-s" onclick="setWatchlistStatus(\''+w.id+'\',\'bought\')" style="color:var(--grn)">Bought</button>':'')
+        +(w.status!=='passed'?'<button class="btn btn-o btn-s" onclick="setWatchlistStatus(\''+w.id+'\',\'passed\')" style="color:var(--tx3)">Pass</button>':'')
+        +(w.status!=='considering'?'<button class="btn btn-o btn-s" onclick="setWatchlistStatus(\''+w.id+'\',\'considering\')">Reconsider</button>':'')
+        +'<button class="btn btn-o btn-s" onclick="removeWatchlist(\''+w.id+'\')" style="margin-left:auto;color:var(--red)">Remove</button>'
+        +'</div></div>';
+    });
+    H+='</div>';
+  }
+  el.innerHTML=H;
+  _updateWatchBadge();
+}
+
+// Re-opens a saved car in the VIN Lookup page with ALL fields pre-filled and
+// automatically decodes — so the user sees the same full 16-section report as a fresh search.
+function openSavedCarInVIN(id){
+  const w=(D.savedCars()||[]).find(x=>x.id===id);if(!w||!w.snapshot)return;
+  const s=w.snapshot;
+  if(typeof sw==='function')sw('vin',null);
+  setTimeout(()=>{
+    const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
+    set('vin-i',s.vin);set('mi-i',s.miles);set('pp-i',s.askPrice);set('zi-i',s.zip||'89014');
+    if(typeof lookupVIN==='function')lookupVIN();
+  },150);
+}
+
+// Export the CURRENTLY displayed VIN analysis (not a saved one) as PDF / HTML / share link.
+function _currentVINAsWatchlistEntry(){
+  const s=window._vinSnap;if(!s||!s.vin)return null;
+  return {id:'current-'+s.vin,savedAt:new Date().toISOString(),status:'considering',notes:'',snapshot:s};
+}
+function exportCurrentVINPDF(){
+  const w=_currentVINAsWatchlistEntry();if(!w){toast('Decode a VIN first');return;}
+  const win=window.open('','_blank');
+  if(!win){toast('Popup blocked \u2014 allow popups');return;}
+  win.document.write('<!DOCTYPE html><html><head><title>'+esc(w.snapshot.vName||'VIN Analysis')+'</title><meta charset="utf-8"><style>body{margin:0;background:#fff;font-family:\'Plus Jakarta Sans\',Arial,sans-serif}@media print{@page{size:letter;margin:0.5in}}</style></head><body>'+_buildWatchlistDetailHTML(w)+'<script>setTimeout(()=>window.print(),400);<\/script></body></html>');
+  win.document.close();
+  toast('Print dialog opens in new tab \u2014 choose \u201cSave as PDF\u201d');
+}
+function exportCurrentVINDoc(){
+  const w=_currentVINAsWatchlistEntry();if(!w){toast('Decode a VIN first');return;}
+  const s=w.snapshot;
+  const html='<!DOCTYPE html><html><head><title>'+esc(s.vName||'VIN Analysis')+'</title><meta charset="utf-8"></head><body>'+_buildWatchlistDetailHTML(w)+'</body></html>';
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const fn='vin-analysis-'+(s.vName||'car').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-'+(s.vin||'').slice(-6)+'.html';
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
+  toast('Downloaded '+fn+' \u2014 open in Google Docs: File \u2192 Open \u2192 Upload');
+}
+function copyCurrentVINLink(){
+  const s=window._vinSnap;if(!s||!s.vin){toast('Decode a VIN first');return;}
+  // Deep-link format: #vin={VIN}&miles=X&ask=Y&zip=Z  — opens app and auto-decodes
+  const params=new URLSearchParams({vin:s.vin,miles:s.miles||'',ask:s.askPrice||'',zip:s.zip||''});
+  const url=location.origin+location.pathname+'#'+params.toString();
+  if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>toast('Share link copied'));
+  else{const t=document.createElement('textarea');t.value=url;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Share link copied');}
+}
+
 function removeWatchlist(id){
   if(!confirm('Remove this car from your watchlist?'))return;
   const list=D.savedCars().filter(w=>w.id!==id);
   D.sSavedCars(list);
-  renderWatchlist();toast('Removed');
+  if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
+  else if(typeof renderWatchlist==='function')renderWatchlist();
+  _updateWatchBadge();
+  toast('Removed');
 }
 function setWatchlistStatus(id,status){
   const list=D.savedCars();
   const w=list.find(x=>x.id===id);if(!w)return;
   w.status=status;w.updatedAt=new Date().toISOString();
-  D.sSavedCars(list);renderWatchlist();
+  D.sSavedCars(list);
+  if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
+  else if(typeof renderWatchlist==='function')renderWatchlist();
   toast('Marked as '+status);
 }
 function addWatchlistToFleet(id){
@@ -4328,7 +4499,7 @@ const CMDS=[
   {l:'Export Calendar (.ics)',h:'Settings',a:()=>exportICS()},
   {l:'Export Schedule C (Tax)',h:'Finances',a:()=>{sw('fin',null);setTimeout(()=>exportScheduleC(new Date().getFullYear()-1),300);}},
   {l:'Next Car Recommender',h:'Fleet',a:()=>showM('nextcar')},
-  {l:'Watchlist (Saved Cars)',h:'Fleet',a:()=>showM('watchlist')},
+  {l:'Watchlist (Saved Cars)',h:'Fleet',a:()=>sw('watch',null)},
   {l:'30-Day Cashflow Forecast',h:'Finances',a:()=>showM('cashflow')},
   {l:'Sign Out',h:'Account',a:()=>doLogout()},
 ];
