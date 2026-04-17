@@ -119,12 +119,50 @@ serve(async (req) => {
       const specs = await decodeRes.json();
       const year = specs.year;
       const make = specs.make;
-      const model = specs.model;
+      const modelRaw = specs.model || "";
 
-      endpoint = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&zip=${zip}&radius=${radius}&rows=50`;
+      // Strip trailing body-style words — MarketCheck decode returns "M4 Convertible" or
+      // "3 Series Sedan" but dealer listings use just "M4" / "3 Series". Without this,
+      // the search returns 0 results for any model where the decode tacks on a body.
+      const BODY_SUFFIXES = [
+        "Convertible", "Coupe", "Sedan", "Hatchback", "Wagon", "Cabriolet",
+        "Roadster", "Crossover", "SUV", "Pickup", "Van", "Minivan",
+        "Sportback", "Gran Coupe", "Shooting Brake", "Targa", "Fastback",
+      ];
+      let modelClean = modelRaw;
+      for (const suffix of BODY_SUFFIXES) {
+        const re = new RegExp("\\s+" + suffix + "\\s*$", "i");
+        if (re.test(modelClean)) {
+          modelClean = modelClean.replace(re, "").trim();
+          break;
+        }
+      }
 
-      const compsRes = await fetch(endpoint);
-      const comps = await compsRes.json();
+      const buildEndpoint = (mdl: string) =>
+        `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(mdl)}&zip=${zip}&radius=${radius}&rows=50`;
+
+      endpoint = buildEndpoint(modelRaw);
+      let compsRes = await fetch(endpoint);
+      let comps = await compsRes.json();
+      let modelUsed = modelRaw;
+
+      // Retry with cleaned model if no results and we actually stripped something
+      if ((!comps.listings || comps.listings.length === 0) && modelClean !== modelRaw) {
+        endpoint = buildEndpoint(modelClean);
+        compsRes = await fetch(endpoint);
+        comps = await compsRes.json();
+        modelUsed = modelClean;
+      }
+
+      // Retry nationwide if still empty (rare cars — no local inventory)
+      if (!comps.listings || comps.listings.length === 0) {
+        const natEndpoint = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(modelClean)}&rows=50`;
+        compsRes = await fetch(natEndpoint);
+        comps = await compsRes.json();
+        if (comps.listings && comps.listings.length > 0) {
+          modelUsed = modelClean + " (nationwide)";
+        }
+      }
 
       // Compute summary stats
       const listings = comps.listings || [];
@@ -153,6 +191,11 @@ serve(async (req) => {
           trim: specs.trim,
           msrp: specs.msrp,
           base_msrp: specs.base_msrp,
+        },
+        debug: {
+          modelUsed,
+          modelRaw,
+          modelClean,
         },
       };
 
