@@ -599,95 +599,41 @@ const D = {
   set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
   tk: k => CT ? 'T' + CT.id + '_' + k : k,
 
-  // FLEET - reads from cache, writes to Supabase
+  // FLEET - cache-only. Supabase writes go through DB.* targeted upserts.
   fleet: () => getCache('vehicles') || getLocal('vehicles'),
-  sFleet: async (f) => {
-    setCache('vehicles', f);
-    if (CONFIGURED && sb && CT) {
-      f.forEach(v => { if (!v.id) v.id = crypto.randomUUID(); if (!v.created_at) v.created_at = new Date().toISOString(); });
-      try { await Promise.all(f.map(v => sb.from('vehicles').upsert({ ...v, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sFleet: (f) => { setCache('vehicles', f); },
 
   // EXPENSES
   exps: () => getCache('expenses') || getLocal('expenses'),
-  sExps: async (e) => {
-    setCache('expenses', e);
-    if (CONFIGURED && sb && CT) {
-      e.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(e.map(r => sb.from('expenses').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sExps: (e) => { setCache('expenses', e); },
 
   // BOOKINGS
   books: () => getCache('bookings') || getLocal('bookings'),
-  sBooks: async (b) => {
-    setCache('bookings', b);
-    if (CONFIGURED && sb && CT) {
-      b.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(b.map(r => sb.from('bookings').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sBooks: (b) => { setCache('bookings', b); },
 
   // MAINTENANCE
   maint: () => getCache('maintenance') || getLocal('maintenance'),
-  sMaint: async (m) => {
-    setCache('maintenance', m);
-    if (CONFIGURED && sb && CT) {
-      m.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(m.map(r => sb.from('maintenance').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sMaint: (m) => { setCache('maintenance', m); },
 
   // DETAILING
   details: () => getCache('detailing') || getLocal('detailing'),
-  sDetails: async (d) => {
-    setCache('detailing', d);
-    if (CONFIGURED && sb && CT) {
-      d.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(d.map(r => sb.from('detailing').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sDetails: (d) => { setCache('detailing', d); },
 
   // FUELS
   fuels: () => getCache('fuels') || getLocal('fuels'),
-  sFuels: async (f) => {
-    setCache('fuels', f);
-    if (CONFIGURED && sb && CT) {
-      f.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(f.map(r => sb.from('fuels').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sFuels: (f) => { setCache('fuels', f); },
 
   // WASHES
   washes: () => getCache('washes') || getLocal('washes'),
-  sWashes: async (w) => {
-    setCache('washes', w);
-    if (CONFIGURED && sb && CT) {
-      w.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(w.map(r => sb.from('washes').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sWashes: (w) => { setCache('washes', w); },
 
   // INCIDENTS
   incidents: () => getCache('incidents') || getLocal('incidents'),
-  sIncidents: async (i) => {
-    setCache('incidents', i);
-    if (CONFIGURED && sb && CT) {
-      i.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(i.map(r => sb.from('incidents').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sIncidents: (i) => { setCache('incidents', i); },
 
   // GUESTS
   guests: () => getCache('guests') || getLocal('guests'),
-  sGuests: async (g) => {
-    setCache('guests', g);
-    if (CONFIGURED && sb && CT) {
-      g.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); if (!r.created_at) r.created_at = new Date().toISOString(); });
-      try { await Promise.all(g.map(r => sb.from('guests').upsert({ ...r, team_id: CT.id }))); } catch(err) {}
-    }
-  },
+  sGuests: (g) => { setCache('guests', g); },
 
   // ACTIVITY (local only - no Supabase table needed for this)
   activity: () => D.get(D.tk('activity'), []),
@@ -896,11 +842,8 @@ function clearRL(k){delete ATTEMPTS[k];}
 document.addEventListener('keydown',e=>{
   if(e.ctrlKey&&e.shiftKey&&e.altKey&&e.key==='F'){
     e.preventDefault();
-    if(!CU){toggleSAF();}
-    else if(!SA){
-      const pass=prompt('Enter Super Admin key:');
-      if(pass)h256(pass+SA_SALT).then(hash=>{if(hash===SA_HASH){activateSA();}else toast('Invalid key');});
-    }
+    // Superadmin backdoor removed in v7.0. Dev-email path grants owner role instead.
+    return;
   }
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('cmd-ov').classList.contains('show')?closeCmd():openCmd();}
   if(e.key==='Escape'){closeCmd();document.getElementById('np').classList.remove('show');}
@@ -911,7 +854,7 @@ document.getElementById('nav-logo').addEventListener('click',()=>{
   if(SA||!CU)return;
   LOGO_TAPS++;clearTimeout(LOGO_TIMER);
   LOGO_TIMER=setTimeout(()=>LOGO_TAPS=0,2000);
-  if(LOGO_TAPS>=7){LOGO_TAPS=0;const pass=prompt('Enter Super Admin key:');if(pass)h256(pass+SA_SALT).then(hash=>{if(hash===SA_HASH){activateSA();}else toast('Invalid key');});}
+  if(LOGO_TAPS>=7){LOGO_TAPS=0;/* SA backdoor removed in v7.0 */}
 });
 
 // Login screen: 7 taps on logo
@@ -925,15 +868,9 @@ function toggleSAF(){const f=document.getElementById('sa-field');f.classList.tog
 function hideSA(){document.getElementById('sa-field').classList.remove('show');document.getElementById('sa-pass').value='';}
 
 async function doSALogin(){
-  const pass=document.getElementById('sa-pass').value;if(!pass)return;
-  const lock=chkRL('__sa__');if(lock){showErr(lock);return;}
-  const hash=await h256(pass+SA_SALT);
-  if(hash!==SA_HASH){failRL('__sa__');showErr('Invalid master key.');document.getElementById('sa-pass').value='';return;}
-  clearRL('__sa__');SA=true;
-  CU={id:'superadmin',email:'superadmin@fleet.app',name:'Super Admin',role:'superadmin'};CT=null;
-  const l=D.saLog();l.unshift({t:new Date().toISOString(),a:'SA Login'});D.sSaLog(l.slice(0,100));
-  sessionStorage.setItem('sa_sess',JSON.stringify({t:Date.now(),exp:Date.now()+7200000}));
-  hideSA();launch();
+  // Superadmin backdoor removed in v7.0. isDev(email) grants owner role via teamRole().
+  showErr('Super Admin mode has been removed. Log in with your owner account.');
+  hideSA();
 }
 
 function activateSA(){
@@ -1148,20 +1085,20 @@ function skipTeam(){CT=null;document.getElementById('team-screen').classList.rem
 function showNewTeam(){document.getElementById('ml-newteam').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Create New Team</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Team Name</label><input type="text" class="fi" id="nt-name" placeholder="e.g. Henderson Fleet Co"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="createExtra()">Create Team</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';showM('newteam');}
 function createExtra(){const name=document.getElementById('nt-name').value.trim();if(!name){toast('Enter a team name');return;}const team={id:'t'+Date.now(),name,code:genCode(),ownerId:CU.id,ownerName:CU.name,members:[],pendingReqs:[],created:new Date().toISOString()};const teams=D.teams();teams.push(team);D.sTeams(teams);CT=team;localStorage.setItem('lt_'+CU.id,CT.id);hideM();updateNavTeam();renderDash();logAct('Team Created',name);toast('Team "'+name+'" created!');}
 
-function showEditTeam(){if(!CT||!isOwner())return;document.getElementById('ml-editteam').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Edit Team</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Team Name</label><input type="text" class="fi" id="et-name" value="'+CT.name+'"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveTeamName()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';showM('editteam');}
+function showEditTeam(){if(!CT||!isOwner())return;document.getElementById('ml-editteam').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Edit Team</span><span class="sh-l"></span></div><div class="fg"><label class="fl">Team Name</label><input type="text" class="fi" id="et-name" value="'+esc(CT.name)+'"></div><div style="display:flex;gap:8px"><button class="btn btn-r btn-f" onclick="saveTeamName()">Save</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';showM('editteam');}
 function saveTeamName(){const name=document.getElementById('et-name').value.trim();if(!name){toast('Enter a team name');return;}const teams=D.teams();const t=teams.find(x=>x.id===CT.id);if(!t)return;t.name=name;D.sTeams(teams);DB.saveTeam(t);CT=t;updateNavTeam();renderDash();hideM();logAct('Team Renamed',name);toast('Team name updated');}
 
 function switchTeam(id){const t=D.teams().find(x=>x.id===id);if(!t)return;CT=t;localStorage.setItem('lt_'+CU.id,CT.id);closeTDD();updateNavTeam();renderDash();toast('Switched to '+t.name);}
 function toggleTDD(){const dd=document.getElementById('tdd');dd.classList.toggle('show');if(dd.classList.contains('show')){renderTDD();document.addEventListener('click',closeTDDOut,{once:true});}}
 function closeTDDOut(e){if(!document.getElementById('team-sw').contains(e.target))closeTDD();}
 function closeTDD(){document.getElementById('tdd').classList.remove('show');}
-function renderTDD(){const mt=SA?D.teams():getMyTeams();document.getElementById('tdd-list').innerHTML=mt.map(t=>'<div class="tdd-item'+(CT&&CT.id===t.id?' active':'')+'" onclick="switchTeam(\''+t.id+'\')"><div><div style="font-weight:600;font-size:12px">'+t.name+'</div><div style="font-size:10px;color:var(--tx3)">'+t.code+'</div></div>'+(CT&&CT.id===t.id?'<span style="color:var(--grn);font-size:10px">&#10003;</span>':'')+'</div>').join('')||'<div style="padding:11px 13px;font-size:11px;color:var(--tx3)">No teams yet</div>';}
+function renderTDD(){const mt=SA?D.teams():getMyTeams();document.getElementById('tdd-list').innerHTML=mt.map(t=>'<div class="tdd-item'+(CT&&CT.id===t.id?' active':'')+'" onclick="switchTeam(\''+t.id+'\')"><div><div style="font-weight:600;font-size:12px">'+esc(t.name)+'</div><div style="font-size:10px;color:var(--tx3)">'+esc(t.code)+'</div></div>'+(CT&&CT.id===t.id?'<span style="color:var(--grn);font-size:10px">&#10003;</span>':'')+'</div>').join('')||'<div style="padding:11px 13px;font-size:11px;color:var(--tx3)">No teams yet</div>';}
 function updateNavTeam(){const el=document.getElementById('nav-team');if(el)el.textContent=CT?CT.name:(SA?'All Teams':'No Team');}
 
 // SESSION
 async function checkSession(){
   const saS=sessionStorage.getItem('sa_sess');
-  if(saS){const s=JSON.parse(saS);if(s.exp>Date.now()){SA=true;CU={id:'superadmin',email:'superadmin@fleet.app',name:'Super Admin',role:'superadmin'};CT=null;launch();return;}else sessionStorage.removeItem('sa_sess');}
+  if(saS){sessionStorage.removeItem('sa_sess');} /* SA session restore removed in v7.0 */
   const saved=localStorage.getItem('cu');
   if(saved){CU=JSON.parse(saved);
     if(isDev(CU.email)&&CU.role!=='owner'){CU.role='owner';localStorage.setItem('cu',JSON.stringify(CU));}
@@ -1203,6 +1140,8 @@ function animStats(){document.querySelectorAll('[data-a]').forEach(el=>{const v=
 function ago(iso){const d=Date.now()-new Date(iso).getTime(),m=Math.floor(d/60000);if(m<1)return'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago';}
 function today(){return new Date().toISOString().split('T')[0];}
 function fmt$(n){return'$'+Number(n||0).toLocaleString();}
+// XSS escape — wrap any user-supplied string before interpolating into innerHTML
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 // ROLES
 function teamRole(){
@@ -1303,13 +1242,13 @@ function showM(id){
   populateDD();
   if(id==='profile'&&CU){
     const _avCircle=CU.avatar?'<div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;overflow:hidden"><img src="'+CU.avatar+'" style="width:100%;height:100%;object-fit:cover"></div>':'<div style="width:48px;height:48px;border-radius:50%;background:'+(SA?'var(--sa)':isDev(CU.email)?'linear-gradient(135deg,var(--acc),var(--grn))':'var(--acc)')+';display:flex;align-items:center;justify-content:center;font-family:\'Rajdhani\',sans-serif;font-weight:700;color:#161616;font-size:20px">'+(CU.name||CU.email||'?')[0].toUpperCase()+'</div>';
-    document.getElementById('ml-profile').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Your Account</span><span class="sh-l"></span></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+_avCircle+'<div><div style="font-size:15px;font-weight:600">'+(CU.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(CU.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'+(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+CT.name+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace">'+CT.code+'</span></div>':'')+'<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-d btn-f" onclick="hideM();sw(\'set\',null)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Edit Profile</button><button class="btn btn-red btn-f" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button></div>';
+    document.getElementById('ml-profile').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Your Account</span><span class="sh-l"></span></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+_avCircle+'<div><div style="font-size:15px;font-weight:600">'+(CU.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(CU.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'+(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+esc(CT.name)+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace">'+CT.code+'</span></div>':'')+'<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-d btn-f" onclick="hideM();sw(\'set\',null)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Edit Profile</button><button class="btn btn-red btn-f" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button></div>';
   }
   document.getElementById('m-'+id).classList.add('show');
 }
 function hideM(){document.querySelectorAll('.mo').forEach(m=>m.classList.remove('show'));}
 function populateDD(){
-  const f=D.fleet(),o=f.map((v,i)=>'<option value="'+i+'">'+v.year+' '+v.make+' '+v.model+'</option>').join('');
+  const f=D.fleet(),o=f.map((v,i)=>'<option value="'+i+'">'+v.year+' '+esc(v.make)+' '+esc(v.model)+'</option>').join('');
   document.querySelectorAll('.car-dd').forEach(el=>el.innerHTML=o||'<option>No vehicles</option>');
 }
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)hideM();}));
@@ -1342,7 +1281,7 @@ function renderDash(){
   const occ=act>0?Math.min(100,Math.round((bookedDays.size/(daysInMonth*Math.max(act,1)))*100)):0;
 
   const ub=b.filter(x=>new Date(x.end)>=now).sort((a,b2)=>new Date(a.start)-new Date(b2.start)).slice(0,4);
-  const ubH=ub.length?ub.map(x=>{const c=f[x.ci]||{};return'<div class="lr"><span style="font-weight:600;font-size:12px">'+(c.year||'')+' '+(c.make||'')+' '+(c.model||'')+'</span><span style="font-size:10px;color:var(--tx2)">'+x.start+'</span><span class="badge b-g">'+x.guest+'</span></div>';}).join(''):'<div class="empty">No upcoming bookings</div>';
+  const ubH=ub.length?ub.map(x=>{const c=f[x.ci]||{};return'<div class="lr"><span style="font-weight:600;font-size:12px">'+(c.year||'')+' '+esc(c.make||'')+' '+esc(c.model||'')+'</span><span style="font-size:10px;color:var(--tx2)">'+x.start+'</span><span class="badge b-g">'+esc(x.guest)+'</span></div>';}).join(''):'<div class="empty">No upcoming bookings</div>';
 
   const md=m.filter(x=>x.nd&&new Date(x.nd)<=new Date(now.getTime()+30*864e5)).slice(0,4);
   const mdH=md.length?md.map(x=>{const c=f[x.ci]||{};return'<div class="lr"><span style="font-weight:600;font-size:12px">'+(c.year||'')+' '+(c.make||'')+' '+(c.model||'')+'</span><span style="font-size:10px;color:var(--amb)">'+x.type+'</span><span style="font-size:10px;color:var(--tx3)">'+x.nd+'</span></div>';}).join(''):'<div class="empty">No maintenance due</div>';
@@ -1396,8 +1335,8 @@ function renderDash(){
     const netEarned=totalEarned-totalExpenses;
     const pct=totalPP>0?Math.min(100,Math.round((netEarned/totalPP)*100)):0;
     const color=pct>=75?'grn':pct>=40?'amb':'red';
-    const selLabel=beVehicleId==='all'?'All Vehicles ('+f.length+')':((v=>v?v.year+' '+v.make+' '+v.model:'Vehicle')(f[parseInt(beVehicleId)]));
-    const selDrop=f.length>1?'<select onchange="D.set(\'dashBeVeh\',this.value);renderDash()" style="font-family:\'Plus Jakarta Sans\',sans-serif;font-size:11px;background:var(--bg2);border:1px solid rgba(181,136,99,.25);border-radius:5px;color:var(--tx2);padding:2px 6px;cursor:pointer"><option value="all"'+(beVehicleId==='all'?' selected':'')+'>All Vehicles</option>'+f.map((v,i)=>'<option value="'+i+'"'+(beVehicleId==i?' selected':'')+'>'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+'</option>').join('')+'</select>':'<span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;color:var(--acc2)">'+selLabel+'</span>';
+    const selLabel=beVehicleId==='all'?'All Vehicles ('+f.length+')':((v=>v?v.year+' '+esc(v.make)+' '+v.model:'Vehicle')(f[parseInt(beVehicleId)]));
+    const selDrop=f.length>1?'<select onchange="D.set(\'dashBeVeh\',this.value);renderDash()" style="font-family:\'Plus Jakarta Sans\',sans-serif;font-size:11px;background:var(--bg2);border:1px solid rgba(181,136,99,.25);border-radius:5px;color:var(--tx2);padding:2px 6px;cursor:pointer"><option value="all"'+(beVehicleId==='all'?' selected':'')+'>All Vehicles</option>'+f.map((v,i)=>'<option value="'+i+'"'+(beVehicleId==i?' selected':'')+'>'+(v.year||'')+' '+esc(v.make||'')+' '+esc(v.model||'')+'</option>').join('')+'</select>':'<span style="font-family:\'Rajdhani\',sans-serif;font-size:11px;color:var(--acc2)">'+selLabel+'</span>';
     beH='<div class="sh reveal"><span class="sh-t">Break-Even Progress</span><span class="sh-l"></span>'+selDrop+'</div><div class="cd reveal"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--tx2)">Net Earned vs Purchase Price</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:13px;color:var(--'+(pct>=100?'grn':pct>=50?'amb':'tx')+')">'+pct+'%</span></div><div class="be-bar"><div class="be-fill '+color+'" style="width:'+pct+'%"></div></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3)"><span>Net Earned: <strong style="color:var(--tx)">'+fmt$(netEarned)+'</strong></span><span>Goal: <strong style="color:var(--tx)">'+fmt$(totalPP)+'</strong></span>'+(pct>=100?'<span style="color:var(--grn);font-weight:700">RECOVERED!</span>':'')+'</div></div>';
   }
 
@@ -1426,7 +1365,7 @@ function renderDash(){
       const profColor=mProfit>0?'var(--grn)':mProfit<0?'var(--red)':'var(--tx3)';
       return'<div class="lr" onclick="sw(\'fleet\',null)" style="cursor:pointer">'
         +'<div style="flex:1;min-width:0">'
-        +'<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(v.year||'')+' '+(v.make||'')+' '+(v.model||'')+(v.trim?' '+v.trim:'')+'</div>'
+        +'<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(v.year||'')+' '+esc(v.make||'')+' '+esc(v.model||'')+(v.trim?' '+esc(v.trim):'')+'</div>'
         +'<div style="font-size:10px;color:var(--tx3);margin-top:1px">'+(v.rate?fmt$(v.rate)+'/day · ':'')+(trips)+' trip'+(trips!==1?'s':'')+' total</div>'
         +'</div>'
         +'<div style="text-align:right;white-space:nowrap">'
@@ -2111,13 +2050,13 @@ function renderFleet(){
           ?'<div style="width:100%;height:160px;background:url(\''+v.photo+'\') center/cover no-repeat;border-radius:8px 8px 0 0;margin:-14px -14px 12px -14px;width:calc(100% + 28px);position:relative">'
             +'<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(10,18,22,.85));border-radius:8px 8px 0 0"></div>'
             +'<div style="position:absolute;bottom:8px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-end">'
-            +'<div><div class="fn" style="color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">'+v.year+' '+v.make+' '+v.model+'</div>'+(v.trim?'<div class="ft" style="color:rgba(255,255,255,.7)">'+v.trim+'</div>':'')+'</div>'
+            +'<div><div class="fn" style="color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">'+v.year+' '+esc(v.make)+' '+esc(v.model)+'</div>'+(v.trim?'<div class="ft" style="color:rgba(255,255,255,.7)">'+esc(v.trim)+'</div>':'')+'</div>'
             +'<div style="display:flex;gap:4px;align-items:center">'+opStatusBadge(v.op_status)+'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+(v.status||'unlisted')+'</span></div>'
             +'</div></div>'
           :'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
             +'<div style="display:flex;align-items:center;gap:10px">'
             +'<div style="width:44px;height:44px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="22" height="16" viewBox="0 0 64 40" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round"><path d="M4 26 C4 26 6 20 9 18 C12 16 16 15 22 14 C26 13 30 10 35 9 C40 8 46 8 50 10 C54 12 57 16 59 20 C60 22 60 26 60 26"/><path d="M4 26 L4 30 L12 30 M20 30 L44 30 M52 30 L60 30 L60 26"/><circle cx="16" cy="30" r="4"/><circle cx="48" cy="30" r="4"/></svg></div>'
-            +'<div><div class="fn">'+v.year+' '+v.make+' '+v.model+'</div>'+(v.trim?'<div class="ft">'+v.trim+'</div>':'')+'</div></div>'
+            +'<div><div class="fn">'+v.year+' '+esc(v.make)+' '+esc(v.model)+'</div>'+(v.trim?'<div class="ft">'+esc(v.trim)+'</div>':'')+'</div></div>'
             +'<div style="display:flex;gap:4px;align-items:center">'+opStatusBadge(v.op_status)+'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+(v.status||'unlisted')+'</span></div>'
             +'</div>';
 
@@ -2173,14 +2112,14 @@ function showEditVeh(i){
     +'</div>'
     +'</div></div>'
     +'<div class="fg"><label class="fl">Year</label><input type="number" class="fi" id="ev-yr" value="'+(v.year||'')+'"></div>'
-    +'<div class="fg"><label class="fl">Make</label><input type="text" class="fi" id="ev-mk" value="'+(v.make||'')+'"></div>'
-    +'<div class="fg"><label class="fl">Model</label><input type="text" class="fi" id="ev-md" value="'+(v.model||'')+'"></div>'
-    +'<div class="fg"><label class="fl">Trim</label><input type="text" class="fi" id="ev-tr" value="'+(v.trim||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Make</label><input type="text" class="fi" id="ev-mk" value="'+esc(v.make||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Model</label><input type="text" class="fi" id="ev-md" value="'+esc(v.model||'')+'"></div>'
+    +'<div class="fg"><label class="fl">Trim</label><input type="text" class="fi" id="ev-tr" value="'+esc(v.trim||'')+'"></div>'
     +'<div class="fg"><label class="fl">Purchase Price ($)</label><input type="number" class="fi" id="ev-pr" value="'+(v.price||'')+'"></div>'
     +'<div class="fg"><label class="fl">Daily Rate ($)</label><input type="number" class="fi" id="ev-rt" value="'+(v.rate||'')+'"></div>'
     +'<div class="fg"><label class="fl">Trips Completed</label><input type="number" class="fi" id="ev-tp" value="'+(v.trips||0)+'"></div>'
     +'<div class="fg"><label class="fl">Current Mileage</label><input type="number" class="fi" id="ev-mi" value="'+(v.mileage||'')+'"></div>'
-    +'<div class="fg"><label class="fl">VIN</label><input type="text" class="fi" id="ev-vn" value="'+(v.vin||'')+'" maxlength="17"></div>'
+    +'<div class="fg"><label class="fl">VIN</label><input type="text" class="fi" id="ev-vn" value="'+esc(v.vin||'')+'" maxlength="17"></div>'
     +'<div class="fg"><label class="fl">Insurance Due Date</label><input type="date" class="fi" id="ev-ins" value="'+(v.insurance_due||'')+'"></div>'
     +'<div class="fg"><label class="fl">Registration Due Date</label><input type="date" class="fi" id="ev-reg" value="'+(v.reg_due||'')+'"></div>'
     +'<div class="fg"><label class="fl">Key Location / Notes</label><input type="text" class="fi" id="ev-key" value="'+(v.key_notes||'')+'" placeholder="e.g. Lockbox #3, code 1234"></div>'
@@ -2275,17 +2214,17 @@ function showVD(i){
     ...incidents.map(inc=>({t:'incident',date:inc.date,title:'Incident — '+inc.type,meta:inc.cost?'Cost: $'+inc.cost:'',color:'var(--red)'})),
   ].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,20);
 
-  const serviceH=allService.length?allService.map(s=>'<div class="tl-item"><div class="tl-dot" style="background:'+s.color+'"></div><div class="tl-body"><div class="tl-title">'+s.title+'</div><div class="tl-meta">'+s.date+(s.meta?' &middot; '+s.meta:'')+'</div></div></div>').join(''):'<div class="empty">No service records yet</div>';
+  const serviceH=allService.length?allService.map(s=>'<div class="tl-item"><div class="tl-dot" style="background:'+s.color+'"></div><div class="tl-body"><div class="tl-title">'+esc(s.title)+'</div><div class="tl-meta">'+s.date+(s.meta?' &middot; '+esc(s.meta):'')+'</div></div></div>').join(''):'<div class="empty">No service records yet</div>';
 
   // Guests tab
   const guestList=guests.filter(g=>!g.blacklisted).slice(0,10);
   const blacklist=guests.filter(g=>g.blacklisted);
-  const guestH=guestList.length?guestList.map(g=>'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+g.name+'</div><div style="font-size:10px;color:var(--tx3)">'+(g.trips||1)+' trip'+(g.trips>1?'s':'')+(g.notes?' &middot; '+g.notes:'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-family:\'Rajdhani\',sans-serif;font-size:14px;color:var(--amb)">'+'&#9733;'.repeat(Math.round(g.rating||5))+'</span>'+(isOwner()?'<button class="btn btn-s btn-red" onclick="blacklistGuest('+i+',\''+g.name+'\')">Block</button>':'')+'</div></div>').join(''):'<div class="empty">No guest records yet</div>';
-  const blackH=blacklist.length?'<div class="sh"><span class="sh-t">Blacklist ('+blacklist.length+')</span><span class="sh-l"></span></div><div class="lc">'+blacklist.map(g=>'<div class="lr"><span style="font-weight:600;font-size:12px;color:var(--red);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'+g.name+'</span><span style="font-size:10px;color:var(--tx3)">'+(g.reason||'Blocked')+'</span></div>').join('')+'</div>':'';
+  const guestH=guestList.length?guestList.map(g=>'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+esc(g.name)+'</div><div style="font-size:10px;color:var(--tx3)">'+(g.trips||1)+' trip'+(g.trips>1?'s':'')+(g.notes?' &middot; '+esc(g.notes):'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-family:\'Rajdhani\',sans-serif;font-size:14px;color:var(--amb)">'+'&#9733;'.repeat(Math.round(g.rating||5))+'</span>'+(isOwner()?'<button class="btn btn-s btn-red" onclick="blacklistGuest('+i+',\''+esc(g.name).replace(/'/g,"&#39;")+'\')">Block</button>':'')+'</div></div>').join(''):'<div class="empty">No guest records yet</div>';
+  const blackH=blacklist.length?'<div class="sh"><span class="sh-t">Blacklist ('+blacklist.length+')</span><span class="sh-l"></span></div><div class="lc">'+blacklist.map(g=>'<div class="lr"><span style="font-weight:600;font-size:12px;color:var(--red);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'+esc(g.name)+'</span><span style="font-size:10px;color:var(--tx3)">'+esc(g.reason||'Blocked')+'</span></div>').join('')+'</div>':'';
 
   document.getElementById('ml-vd').innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
-    +'<div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700">'+v.year+' '+v.make+' '+v.model+'</div><div style="font-size:11px;color:var(--tx3)">'+( v.trim||'')+(v.vin?' &middot; '+v.vin:'')+'</div></div>'
+    +'<div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700">'+v.year+' '+esc(v.make)+' '+esc(v.model)+'</div><div style="font-size:11px;color:var(--tx3)">'+( v.trim||'')+(v.vin?' &middot; '+v.vin:'')+'</div></div>'
     +'<span class="badge '+(v.status==='listed'?'b-g':'b-a')+'">'+v.status+'</span>'
     +'</div>'
     +'<div class="vd-tabs"><button class="vd-tab a" onclick="vdTab(this,\'ov\')">Overview</button><button class="vd-tab" onclick="vdTab(this,\'svc\')">Service Log</button><button class="vd-tab" onclick="vdTab(this,\'guests\')">Guests</button><button class="vd-tab" onclick="vdTab(this,\'fin\')">Financials</button><button class="vd-tab" onclick="vdTab(this,\'exit\')">Exit Strategy</button></div>'
@@ -2314,7 +2253,7 @@ function showVD(i){
     +(rpm?'<div class="cd" style="margin-bottom:12px"><div class="cd-r"><span class="l">Revenue Per Mile</span><span class="v">$'+rpm+'</span></div><div class="cd-r"><span class="l">Total Miles Tracked</span><span class="v">'+totalMiles.toLocaleString()+'</span></div></div>':'')
     +'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx2);margin-bottom:4px"><span>Break-Even Progress</span><span style="font-weight:700">'+pct+'%</span></div><div class="be-bar"><div class="be-fill '+color+'" style="width:'+pct+'%"></div></div><div style="font-size:10px;color:var(--tx3)">Earned '+fmt$(netProfit)+' of '+fmt$(pp)+' purchase price</div></div>'
     +'<div class="sh"><span class="sh-t">Recent Bookings</span><span class="sh-l"></span></div>'
-    +'<div class="lc">'+(bks.length?bks.slice(0,8).map(x=>'<div class="lr"><span style="font-size:12px">'+x.guest+'</span><span style="font-size:10px;color:var(--tx2)">'+x.start+' &rarr; '+x.end+'</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;color:var(--grn)">'+fmt$(x.amount)+'</span></div>').join(''):'<div class="empty">No trips logged yet</div>')+'</div>'
+    +'<div class="lc">'+(bks.length?bks.slice(0,8).map(x=>'<div class="lr"><span style="font-size:12px">'+esc(x.guest)+'</span><span style="font-size:10px;color:var(--tx2)">'+x.start+' &rarr; '+x.end+'</span><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;color:var(--grn)">'+fmt$(x.amount)+'</span></div>').join(''):'<div class="empty">No trips logged yet</div>')+'</div>'
     +'</div>'
 
     // EXIT STRATEGY
@@ -2395,7 +2334,7 @@ function renderCal(){
     const dd2=day.getDate().toString().padStart(2,'0');
     const surge=surges.find(s=>s.d===dd2);
     const evs=[
-      ...b.filter(x=>ds>=x.start&&ds<=x.end).map(x=>{const c=f[x.ci]||{};return'<div class="cal-ev booked">'+x.guest+' - '+(c.make||'')+'</div>';}),
+      ...b.filter(x=>ds>=x.start&&ds<=x.end).map(x=>{const c=f[x.ci]||{};return'<div class="cal-ev booked">'+esc(x.guest)+' - '+esc(c.make||'')+'</div>';}),
       ...m.filter(x=>x.date===ds).map(x=>'<div class="cal-ev maint">'+x.type+'</div>'),
       ...d.filter(x=>x.date===ds).map(x=>'<div class="cal-ev detail">Detail</div>'),
       surge?'<div class="cal-ev surge">'+surge.name+'</div>':'',
@@ -2549,7 +2488,7 @@ function renderWork(){
             +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
             +(pay>0&&hasRate?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
             +'</div>'
-            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+e.notes+'</div>':'')
+            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+esc(e.notes)+'</div>':'')
             +'</div>';
         });
         H+='</div>';
@@ -2658,7 +2597,7 @@ function renderWork(){
             +(e.hours?'<span><strong style="color:var(--tx1)">'+e.hours+'</strong> hrs</span>':'')
             +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
             +(pay>0?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
-            +(e.notes?'<span style="color:var(--tx3)">'+e.notes+'</span>':'')
+            +(e.notes?'<span style="color:var(--tx3)">'+esc(e.notes)+'</span>':'')
             +'</div></div>';
         });
         H+='</div>';
@@ -2781,7 +2720,7 @@ function renderWork(){
             +(e.jobs?'<span><strong style="color:var(--tx1)">'+e.jobs+'</strong> job'+(e.jobs>1?'s':'')+'</span>':'')
             +((pay>0&&(r.hourly||r.perjob))?'<span style="color:var(--grn);font-weight:600">'+fmt$(pay)+'</span>':'')
             +'</div>'
-            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+e.notes+'</div>':'')
+            +(e.notes?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">'+esc(e.notes)+'</div>':'')
             +'</div>';
         });
         H+='</div>';
@@ -2931,9 +2870,9 @@ function renderFin(){
     +'<div class="g21" style="margin-top:14px">'
     +'<div><div class="sh"><span class="sh-t">Revenue vs Expenses</span><span class="sh-l"></span></div><div class="cc"><canvas id="fin-c" style="max-height:200px"></canvas></div>'
     +'<div class="sh" style="margin-top:14px"><span class="sh-t">Trip Log</span><span class="sh-l"></span></div>'
-    +'<div class="lc">'+(b.length?b.slice().reverse().slice(0,15).map(x=>{const c=f[x.ci]||{};return'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+x.guest+'</div><div style="font-size:10px;color:var(--tx2)">'+(c.year||'')+' '+(c.make||'')+' '+(c.model||'')+' &middot; '+x.start+' &rarr; '+x.end+'</div></div><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:14px;color:var(--grn)">'+fmt$(x.amount)+'</span></div>';}).join(''):'<div class="empty">No trips logged yet. Add a booking to track earnings.</div>')+'</div>'
+    +'<div class="lc">'+(b.length?b.slice().reverse().slice(0,15).map(x=>{const c=f[x.ci]||{};return'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+esc(x.guest)+'</div><div style="font-size:10px;color:var(--tx2)">'+(c.year||'')+' '+esc(c.make||'')+' '+esc(c.model||'')+' &middot; '+x.start+' &rarr; '+x.end+'</div></div><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:14px;color:var(--grn)">'+fmt$(x.amount)+'</span></div>';}).join(''):'<div class="empty">No trips logged yet. Add a booking to track earnings.</div>')+'</div>'
     +'<div class="sh" style="margin-top:14px"><span class="sh-t">Expense Log</span><span class="sh-l"></span></div>'
-    +'<div class="lc">'+(e.length?e.slice().reverse().slice(0,10).map(x=>{const c=f[x.ci]||{};return'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+x.category+'</div><div style="font-size:10px;color:var(--tx2)">'+(c.year||'')+' '+(c.make||'')+' '+(c.model||'')+' &middot; '+x.date+'</div></div><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:14px;color:var(--red)">-'+fmt$(x.amount)+'</span></div>';}).join(''):'<div class="empty">No expenses logged</div>')+'</div>'
+    +'<div class="lc">'+(e.length?e.slice().reverse().slice(0,10).map(x=>{const c=f[x.ci]||{};return'<div class="lr"><div><div style="font-weight:600;font-size:12px">'+esc(x.category)+'</div><div style="font-size:10px;color:var(--tx2)">'+(c.year||'')+' '+esc(c.make||'')+' '+esc(c.model||'')+' &middot; '+x.date+'</div></div><span style="font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:14px;color:var(--red)">-'+fmt$(x.amount)+'</span></div>';}).join(''):'<div class="empty">No expenses logged</div>')+'</div>'
     +'</div>'
     +'<div>'
     +'<div class="sh" style="margin-top:0"><span class="sh-t">All-Time Summary</span><span class="sh-l"></span></div>'
@@ -2982,7 +2921,7 @@ function sAt(tab,el){
     +'<div class="sh"><span class="sh-t">Supabase Health</span><span class="sh-l"></span></div>'
     +'<div id="supa-diag" style="margin-bottom:10px"><button class="btn btn-o btn-s" onclick="runSupaDiag()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Run Table Check</button></div>'
     +'<div class="sh"><span class="sh-t">All Teams</span><span class="sh-l"></span></div>'
-    +'<div class="lc">'+D.teams().map(t=>'<div class="u-row"><div><div style="font-weight:600;font-size:13px">'+t.name+'</div><div style="font-size:11px;color:var(--tx3)">'+t.code+' &middot; Owner: '+t.ownerName+' &middot; Members: '+(t.members&&t.members.length||0)+'</div></div><button class="btn btn-sa btn-s" onclick="switchTeam(\''+t.id+'\')">View</button></div>').join('')+'</div>'
+    +'<div class="lc">'+D.teams().map(t=>'<div class="u-row"><div><div style="font-weight:600;font-size:13px">'+esc(t.name)+'</div><div style="font-size:11px;color:var(--tx3)">'+esc(t.code)+' &middot; Owner: '+esc(t.ownerName)+' &middot; Members: '+(t.members&&t.members.length||0)+'</div></div><button class="btn btn-sa btn-s" onclick="switchTeam(\''+t.id+'\')">View</button></div>').join('')+'</div>'
     +(SA?'<div style="margin-top:14px"><button class="btn btn-red" onclick="doLogout()">Exit Super Admin</button></div>':'')
     +'</div>';
   }
@@ -3068,7 +3007,7 @@ function renderSet(){
     +'<div class="sh"><span class="sh-t">Team</span><span class="sh-l"></span></div>'
     +'<div class="cd">'
     +(CT?
-      '<div class="cd-r"><span class="l">Team Name</span><span class="v">'+CT.name+'</span></div>'
+      '<div class="cd-r"><span class="l">Team Name</span><span class="v">'+esc(CT.name)+'</span></div>'
       +'<div class="cd-r"><span class="l">Team Code</span><span class="v" style="display:flex;align-items:center;gap:8px"><span style="font-family:monospace;font-size:12px">'+CT.code+'</span><button onclick="navigator.clipboard.writeText(\''+CT.code+'\');toast(\'Team code copied!\')" style="background:var(--rg2);border:1px solid rgba(181,136,99,.2);color:var(--acc2);padding:2px 8px;border-radius:5px;font-size:9px;font-family:Rajdhani,sans-serif;font-weight:700;cursor:pointer;letter-spacing:1px">COPY</button></span></div>'
       +(isOwner()?'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-d btn-f btn-s" onclick="showEditTeam()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Team Name</button><button class="btn btn-o btn-f btn-s" onclick="showInviteModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Share Invite</button></div>':'')
     :'<div style="font-size:12px;color:var(--tx3);padding:8px 0">No team selected.</div>')
@@ -3144,7 +3083,7 @@ function renderAdminInSet(){
   if(!c)return;
   if(!isMgr()&&!isDev(CU?.email)){c.innerHTML='<div class="empty">Access denied</div>';return;}
   c.innerHTML=
-    '<div class="sh" style="margin-top:0"><span class="sh-t">Admin Panel</span><span class="sh-l"></span>'+(CT?'<span style="font-size:11px;color:var(--tx3)">'+CT.name+'</span>':'')+'</div>'
+    '<div class="sh" style="margin-top:0"><span class="sh-t">Admin Panel</span><span class="sh-l"></span>'+(CT?'<span style="font-size:11px;color:var(--tx3)">'+esc(CT.name)+'</span>':'')+'</div>'
     +'<div class="adm-tabs"><button class="adm-tab a" onclick="sAt(\'users\',this)">Users &amp; Roles</button><button class="adm-tab" onclick="sAt(\'pending\',this)">Pending</button><button class="adm-tab" onclick="sAt(\'activity\',this)">Activity Log</button><button class="adm-tab" onclick="sAt(\'notif\',this)">Send Notification</button>'+(SA||isDev(CU?.email)?'<button class="adm-tab" onclick="sAt(\'sa\',this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2.5"/><polyline points="6 9 3.5 12 6 15"/><line x1="10" y1="12" x2="16" y2="12"/></svg> Dev</button>':'')+'</div>'
     +'<div id="adm-c"></div>'
     +(SA||isDev(CU?.email)?'<div class="sh" style="margin-top:22px"><span class="sh-t">Developer Settings</span><span class="sh-l"></span></div><div class="cd"><div style="margin-bottom:10px"><span class="badge '+(CONFIGURED?'b-g':'b-a')+'">'+(CONFIGURED?'Supabase Connected':'localStorage Mode')+'</span></div>'+(CONFIGURED?'<p style="font-size:12px;color:var(--grn);margin-bottom:8px">Connected to Supabase cloud.</p><div class="cd-r"><span class="l">Project URL</span><span class="v" style="font-family:monospace;font-size:10px">yeohfqzdgvhwyjmezdii.supabase.co</span></div>':'<div style="font-size:11px;color:var(--tx2);line-height:1.7">Running in demo mode.</div>')+'</div>':'');
@@ -3387,7 +3326,7 @@ function buildModals(){
 }
 
 // ── SAVE FUNCTIONS ──
-function saveVeh(){if(!canEdit()){toast('Permission denied');return;}const v={year:document.getElementById('a-yr').value,make:document.getElementById('a-mk').value,model:document.getElementById('a-md').value,trim:document.getElementById('a-tr').value,price:document.getElementById('a-pr').value,rate:document.getElementById('a-rt').value,trips:document.getElementById('a-tp').value||0,mileage:document.getElementById('a-mi').value||'',vin:document.getElementById('a-vn').value.toUpperCase(),status:'unlisted',op_status:'available',purchase_date:today()};if(!v.year||!v.make||!v.model){toast('Year, Make, Model required');return;}DB.saveVehicle(v).then(()=>{logAct('Vehicle Added',v.year+' '+v.make+' '+v.model);renderFleet();});hideM();toast('Vehicle added');['a-yr','a-mk','a-md','a-tr','a-pr','a-rt','a-tp','a-mi','a-vn'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
+function saveVeh(){if(!canEdit()){toast('Permission denied');return;}const v={year:document.getElementById('a-yr').value,make:document.getElementById('a-mk').value,model:document.getElementById('a-md').value,trim:document.getElementById('a-tr').value,price:document.getElementById('a-pr').value,rate:document.getElementById('a-rt').value,trips:document.getElementById('a-tp').value||0,mileage:document.getElementById('a-mi').value||'',vin:document.getElementById('a-vn').value.toUpperCase(),status:'unlisted',op_status:'available',purchase_date:today()};if(!v.year||!v.make||!v.model){toast('Year, Make, Model required');return;}DB.saveVehicle(v).then(()=>{logAct('Vehicle Added',v.year+' '+esc(v.make)+' '+v.model);renderFleet();});hideM();toast('Vehicle added');['a-yr','a-mk','a-md','a-tr','a-pr','a-rt','a-tp','a-mi','a-vn'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
 
 function setExpCat(cat){
   document.getElementById('e-cat').value=cat;
@@ -3509,7 +3448,7 @@ function openCmd(){document.getElementById('cmd-ov').classList.add('show');const
 function closeCmd(){document.getElementById('cmd-ov').classList.remove('show');}
 function renderCmds(q){
   const flt=q?CMDS.filter(c=>c.l.toLowerCase().includes(q.toLowerCase())):CMDS;
-  const vr=q?D.fleet().filter(v=>(v.year+' '+v.make+' '+v.model).toLowerCase().includes(q.toLowerCase())).map(v=>({l:v.year+' '+v.make+' '+v.model,h:'Fleet',a:()=>{sw('fleet',null);closeCmd();}})):[];
+  const vr=q?D.fleet().filter(v=>(v.year+' '+esc(v.make)+' '+v.model).toLowerCase().includes(q.toLowerCase())).map(v=>({l:v.year+' '+esc(v.make)+' '+v.model,h:'Fleet',a:()=>{sw('fleet',null);closeCmd();}})):[];
   const all=[...flt,...vr].slice(0,8);
   document.getElementById('cmd-res').innerHTML=all.map(c=>'<div class="cp-item"><span class="cp-l">'+c.l+'</span><span class="cp-h">'+c.h+'</span></div>').join('');
   document.querySelectorAll('.cp-item').forEach((el,i)=>{el.onclick=()=>{all[i].a();closeCmd();};});
