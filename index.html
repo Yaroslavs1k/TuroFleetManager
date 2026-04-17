@@ -1823,6 +1823,46 @@ async function lookupVIN(){
       +(canEdit()?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid '+qBorder+'"><button class="btn btn-r" onclick="addFromVIN()">+ Add to Fleet</button></div>':'')
       +'</div>';
 
+    // ── LIVE ASKING-PRICE SLIDER (Phase 5.5) ──
+    // Expose computed context so the slider can recompute verdict client-side
+    window._vinCtx={tgt:tgt,mx:mx,wk:wk,riskScore:riskScore,profitMonth:profitMonth,baseAsk:askPrice||tgt};
+    const _sliderMin=Math.max(1000,Math.round(tgt*0.7/1000)*1000);
+    const _sliderMax=Math.round(wk*1.1/1000)*1000;
+    const _sliderInit=askPrice||tgt;
+    H+='<div style="margin-bottom:20px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tx3);text-transform:uppercase">Test an asking price</div>'
+      +'<div style="font-family:Rajdhani,sans-serif;font-size:18px;font-weight:700;color:var(--acc2)" id="vin-slider-val">'+fmt$(_sliderInit)+'</div>'
+      +'</div>'
+      +'<input type="range" id="vin-slider" min="'+_sliderMin+'" max="'+_sliderMax+'" step="250" value="'+_sliderInit+'" oninput="_vinSliderUpdate(this.value)" style="width:100%;accent-color:var(--acc2)">'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-top:4px"><span>'+fmt$(_sliderMin)+'</span><span>Target '+fmt$(tgt)+'</span><span>Walk '+fmt$(wk)+'</span><span>'+fmt$(_sliderMax)+'</span></div>'
+      +'<div id="vin-slider-verdict" style="margin-top:10px;padding:10px;border-radius:8px;font-size:12px;line-height:1.6"></div>'
+      +'</div>';
+
+    // ── TL;DR / FULL REPORT TOGGLE (Phase 5.4) ──
+    H+='<div style="display:flex;gap:6px;margin-bottom:14px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:4px;width:fit-content">'
+      +'<button id="vin-mode-tldr" class="btn" style="padding:6px 14px;font-size:11px;background:var(--acc2);color:#0a0a0a;border:0;border-radius:6px;font-weight:700" onclick="_vinSetMode(\'tldr\')">TL;DR</button>'
+      +'<button id="vin-mode-full" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;color:var(--tx2);border:0;border-radius:6px;font-weight:600" onclick="_vinSetMode(\'full\')">Full Report</button>'
+      +'</div>';
+    // TL;DR panel — quick glance at top findings
+    H+='<div id="vin-tldr">';
+    // Top recall summary
+    const _topRecall=recalls.slice(0,3).map(r=>'<li style="margin-bottom:3px">'+esc(r.Component||'Unknown')+'</li>').join('')||'<li style="color:var(--grn)">No open recalls</li>';
+    // Monthly profit & payback preview
+    H+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px">'
+      +'<div class="sc" style="padding:11px"><div class="sc-sub">Est. Profit</div><div class="sc-val '+(profitMonth>0?'grn':'red')+'" style="font-size:17px">'+fmt$(profitMonth)+'/mo</div></div>'
+      +'<div class="sc" style="padding:11px"><div class="sc-sub">Target Buy</div><div class="sc-val grn" style="font-size:17px">'+fmt$(tgt)+'</div></div>'
+      +'<div class="sc" style="padding:11px"><div class="sc-sub">Walk Away</div><div class="sc-val red" style="font-size:17px">'+fmt$(wk)+'</div></div>'
+      +'<div class="sc" style="padding:11px"><div class="sc-sub">Risk</div><div class="sc-val '+(riskScore<=4?'grn':riskScore<=6?'amb':'red')+'" style="font-size:17px">'+riskScore+'/10</div></div>'
+      +'</div>';
+    H+='<div class="cd" style="margin-bottom:14px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);text-transform:uppercase;margin-bottom:6px">Top Recalls</div><ul style="margin:0;padding-left:18px;font-size:11px;color:var(--tx2);line-height:1.7">'+_topRecall+'</ul>'
+      +(recalls.length>3?'<div style="margin-top:6px;font-size:10px;color:var(--tx3)">+'+(recalls.length-3)+' more — see Full Report</div>':'')+'</div>';
+    H+='<div style="text-align:center;margin-bottom:14px"><button class="btn btn-o" onclick="_vinSetMode(\'full\')">Show full analysis (16 sections) &rarr;</button></div>';
+    H+='</div>'; // /vin-tldr
+
+    // Full sections wrapper (hidden by default when TL;DR mode active)
+    H+='<div id="vin-full" style="display:none">';
+
     // ── 01 NEGOTIATION CARD ──
     H+='<div style="margin-bottom:20px">'+SH('01','Negotiation Card');
     H+='<div class="ph" style="text-align:left"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div class="ph-e">Fleet Purchase Analysis &bull; Las Vegas Turo</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:19px;font-weight:700;color:var(--tx);margin:3px 0">'+vName+'</div><div style="font-size:11px;color:var(--tx3)">'+Number(miles||0).toLocaleString()+' mi &bull; ZIP '+zip+' &bull; '+segLabel+'</div></div><div style="text-align:right;padding-left:12px"><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Damage Risk</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:32px;font-weight:700;color:'+riskColor+';line-height:1">'+riskScore+'<span style="font-size:13px">/10</span></div><div style="font-size:9px;font-weight:700;color:'+riskColor+'">'+riskLabel+'</div></div></div>';
@@ -2025,6 +2065,8 @@ async function lookupVIN(){
     H+='<div style="margin-top:10px;font-size:10px;color:var(--tx3)">Exit before 100k for best resale position. After 100k, value drops faster than incremental Turo revenue compensates. Clean Carfax + documented services = top-of-range resale.</div>';
     H+='</div></div>';
 
+    H+='</div>'; // /vin-full (end of Phase 5.4 full-report wrapper)
+
     // ── RESEARCH LINKS + ACTIONS ──
     H+='<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span></div>';
     H+='<div class="rg" style="margin-bottom:14px"><a class="rl" href="https://www.kbb.com/'+ml+'/'+mdl+'/'+cv.year+'/" target="_blank">KBB</a><a class="rl" href="https://www.edmunds.com/'+ml+'/'+mdl+'/'+cv.year+'/appraisal-value/" target="_blank">Edmunds</a><a class="rl" href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin='+vin+'" target="_blank">Carfax</a><a class="rl" href="https://www.nicb.org/vincheck?vin='+vin+'" target="_blank">NICB</a><a class="rl" href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank">NHTSA</a><a class="rl" href="https://turo.com/us/en/search?defaultZipCode='+zip+'&location=Las+Vegas" target="_blank">Turo LV</a></div>';
@@ -2032,6 +2074,8 @@ async function lookupVIN(){
 
     document.getElementById('vin-res').innerHTML=H;
     document.getElementById('vin-res').style.display='block';
+    // Initialize live slider verdict display (Phase 5.5)
+    if(typeof _vinSliderUpdate==='function'){const s=document.getElementById('vin-slider');if(s)_vinSliderUpdate(s.value);}
     logAct('VIN Lookup',cv.year+' '+cv.make+' '+cv.model);
 
     // Init depreciation chart after DOM is ready
@@ -2063,6 +2107,53 @@ function addFromVIN(){
       toast('Fields pre-filled from VIN — enter your daily rate and save');
     },80);
   }
+}
+
+// ── VIN TL;DR / FULL TOGGLE (Phase 5.4) ──
+function _vinSetMode(mode){
+  const tldr=document.getElementById('vin-tldr');
+  const full=document.getElementById('vin-full');
+  const bt=document.getElementById('vin-mode-tldr');
+  const bf=document.getElementById('vin-mode-full');
+  if(!tldr||!full)return;
+  if(mode==='full'){
+    tldr.style.display='none';full.style.display='block';
+    if(bf){bf.style.background='var(--acc2)';bf.style.color='#0a0a0a';bf.style.fontWeight='700';}
+    if(bt){bt.style.background='transparent';bt.style.color='var(--tx2)';bt.style.fontWeight='600';}
+  }else{
+    tldr.style.display='block';full.style.display='none';
+    if(bt){bt.style.background='var(--acc2)';bt.style.color='#0a0a0a';bt.style.fontWeight='700';}
+    if(bf){bf.style.background='transparent';bf.style.color='var(--tx2)';bf.style.fontWeight='600';}
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+}
+
+// ── VIN LIVE SLIDER (Phase 5.5) ──
+// Recomputes verdict from asking price without re-running the API.
+// Rough heuristic: monthly profit changes by ~$16.67/$1000 (5yr amortization proxy).
+function _vinSliderUpdate(val){
+  const ctx=window._vinCtx;if(!ctx)return;
+  const ask=Number(val);
+  document.getElementById('vin-slider-val').textContent=fmt$(ask);
+  // Adjust profit by amortization delta from baseAsk
+  const deltaPrice=ask-ctx.baseAsk;
+  const adjustedProfit=Math.round(ctx.profitMonth-(deltaPrice/60));
+  // Derive verdict
+  let verdict,color,bg,bd;
+  if(ask<=ctx.tgt&&ctx.riskScore<7&&adjustedProfit>0){verdict='WORTH PURSUING';color='var(--grn)';bg='rgba(109,186,125,.1)';bd='rgba(109,186,125,.35)';}
+  else if(ask>ctx.wk||(ctx.riskScore>=8&&adjustedProfit<=0)){verdict='WALK';color='var(--red)';bg='rgba(196,122,106,.1)';bd='rgba(196,122,106,.35)';}
+  else{verdict='DIG DEEPER';color='var(--amb)';bg='rgba(224,159,62,.1)';bd='rgba(224,159,62,.35)';}
+  // Delta vs target
+  const deltaTgt=ask-ctx.tgt;
+  const deltaLbl=deltaTgt>0?fmt$(deltaTgt)+' above target':deltaTgt<0?fmt$(Math.abs(deltaTgt))+' below target':'at target';
+  const el=document.getElementById('vin-slider-verdict');
+  if(!el)return;
+  el.style.background=bg;el.style.border='1px solid '+bd;
+  el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<div><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:'+color+';line-height:1.1">'+verdict+'</div>'
+    +'<div style="font-size:10px;color:var(--tx3);margin-top:3px">At this price: '+deltaLbl+'</div></div>'
+    +'<div style="text-align:right"><div style="font-size:10px;color:var(--tx3)">Est. monthly profit</div><div style="font-family:Rajdhani,sans-serif;font-size:17px;font-weight:700;color:'+(adjustedProfit>0?'var(--grn)':'var(--red)')+'">'+fmt$(adjustedProfit)+'</div></div>'
+    +'</div>';
 }
 
 // ── FLEET ──
