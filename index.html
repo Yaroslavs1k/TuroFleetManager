@@ -1094,10 +1094,9 @@ async function chkTeams(){
       const existing=D.teams().find(t=>t.ownerId===CU.id);
       if(existing){CT=existing;localStorage.setItem('lt_'+CU.id,CT.id);launch();return;}
       // Auto-create default team for dev
-      const team={id:'t'+Date.now(),name:'My Fleet',code:'FLEET-DEFAULT',ownerId:CU.id,ownerName:CU.name||'Yaroslav',members:[],pendingReqs:[],created:new Date().toISOString()};
+      const team={id:'t'+Date.now(),name:'My Fleet',code:'FLEET-DEFAULT',ownerId:CU.id,ownerName:CU.name||'Owner',members:[],pendingReqs:[],created:new Date().toISOString()};
       const teams=D.teams();teams.push(team);D.sTeams(teams);
       CT=team;localStorage.setItem('lt_'+CU.id,CT.id);
-      if(!D.fleet().length)D.sFleet([{year:'2015',make:'Nissan',model:'Altima',trim:'2.5 S',vin:'REDACTED',price:'11000',rate:'45',trips:4,status:'listed',mileage:'60000',purchase_date:'2025-01-01'}]);
       launch();return;
     }
     showTeamSetup();
@@ -1130,7 +1129,6 @@ function createTeam(){
   CU.role='owner';localStorage.setItem('cu',JSON.stringify(CU));
   CT=team;localStorage.setItem('lt_'+CU.id,CT.id);
   document.getElementById('team-screen').classList.remove('show');
-  if(!D.fleet().length)D.sFleet([{year:'2015',make:'Nissan',model:'Altima',trim:'2.5 S',vin:'REDACTED',price:'11000',rate:'45',trips:4,status:'listed',mileage:'60000',purchase_date:'2025-01-01'}]);
   logAct('Team Created',name);toast('Team "'+name+'" created!');launch();
 }
 
@@ -1244,7 +1242,6 @@ function launch(){
   updateNavTeam();buildNav();buildModals();renderVin();renderDash();
   setDateFields();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  if(!D.fleet().length&&CT)D.sFleet([{year:'2015',make:'Nissan',model:'Altima',trim:'2.5 S',vin:'REDACTED',price:'11000',rate:'45',trips:4,status:'listed',mileage:'60000',purchase_date:'2025-01-01'}]);
   setTimeout(chkAlerts,1200);updNDot();
   // Sync all data from Supabase on launch
   if(CONFIGURED&&sb&&CT){
