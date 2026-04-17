@@ -1694,7 +1694,10 @@ async function lookupVIN(){
     if(marketData && marketData.median_price>0){
       const mktAvgMi=marketData.avg_miles||expMiles;
       const mktMiDiff=mktAvgMi>0?(mktAvgMi-actMiles)/mktAvgMi:0;
-      const mktMiAdj=mktMiDiff>0.3?0.12:mktMiDiff>0.15?0.06:mktMiDiff<-0.3?-0.12:mktMiDiff<-0.15?-0.06:0;
+      // Capped 2026-04-17 after chart showed $92k for a car with real market $78-85k.
+      // The median already partially reflects mileage variance, so additional premium
+      // shouldn't be more than ~7% or it double-counts.
+      const mktMiAdj=mktMiDiff>0.3?0.07:mktMiDiff>0.15?0.04:mktMiDiff<-0.3?-0.07:mktMiDiff<-0.15?-0.04:0;
       adjVal=Math.round(marketData.median_price*(1+mktMiAdj));
       valSource='live-market-'+marketData.count+'-comps';
     }
@@ -1800,27 +1803,33 @@ async function lookupVIN(){
     const totalRev=scenarios[1].profit*12*exitYrs;
     const lifePL=totalRev+exitVal-askPrice;
 
-    // ── Depreciation Curve Data ──
-    // Anchor to live MarketCheck MSRP when available, otherwise segment default.
-    // Then reconcile the curve so current-age point matches the live market value —
-    // e.g. a C8 at 3yr should show ~$82k (real market), not ~$50k (generic curve).
+    // ── Depreciation Curve Data (dual-track) ──
+    // TWO lines now:
+    //   typicalVals[] = generic depreciation curve from MSRP — what an average miles car is worth
+    //   thisCarVals[] = this specific car's trajectory, factoring low-miles premium
+    // Rendering both prevents the chart from looking like the car "appreciated" when it really
+    // just held value better than the generic model because of low miles.
     const liveMsrp=(marketData&&marketData.specs&&marketData.specs.msrp)?parseFloat(marketData.specs.msrp)||0:0;
     const anchorMsrp=liveMsrp>0?liveMsrp:msrpEst;
     const chartYrs=Array.from({length:12},(_,i)=>i);
-    const chartVals=chartYrs.map(y=>{
+    const typicalVals=chartYrs.map(y=>{
+      let v=anchorMsrp;
+      for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
+      return Math.round(v);
+    });
+    const thisCarVals=chartYrs.map(y=>{
       if(y===0)return anchorMsrp;
-      // Years before current age — linear-interp from MSRP to live adjVal
       if(hasLiveMarket&&age>0&&y<=age){
         const t=y/age;
         return Math.round(anchorMsrp*(1-t)+adjVal*t);
       }
-      // Years at-or-after current age — apply depreciation forward from adjVal (or msrp if no live)
       const startVal=hasLiveMarket?adjVal:anchorMsrp;
       const startYr=hasLiveMarket?age:0;
       let v2=startVal;
       for(let i=startYr;i<y&&(i-startYr)<DEP_Y.length;i++)v2*=(1-DEP_Y[i-startYr]);
       return Math.round(v2);
     });
+    const chartVals=thisCarVals; // keep original var alive for backward-compat in table
     const swS=isSport?2:isLux?2:3,swE=isSport?5:isLux?5:6;
 
     // ── Damage-adjusted negotiation range ──
@@ -2227,17 +2236,35 @@ async function lookupVIN(){
 
     // ── 13 BEST AGE TO BUY ──
     H+='<div style="margin-bottom:14px">'+SH('13','Best Age to Buy \u2014 Depreciation Curve');
-    H+='<div class="cd"><canvas id="dep-chart" style="max-height:220px;margin-bottom:14px"></canvas>';
+    H+='<div class="cd">';
+    // Reference data panel — all the price/market numbers at a glance
+    const refMsrpLabel=liveMsrp>0?'MSRP (live)':'MSRP (est.)';
+    const pctBelowMkt=hasLiveMarket&&askPrice>0?((marketData.median_price-askPrice)/marketData.median_price*100):null;
+    const appreciationPct=hasLiveMarket?((adjVal/anchorMsrp-1)*100):null;
+    H+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px;padding:11px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">'
+      +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">'+refMsrpLabel+'</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(anchorMsrp)+'</div></div>'
+      +(hasLiveMarket?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Market Median</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(marketData.median_price)+'</div><div style="font-size:9px;color:var(--tx3)">'+marketData.count+' live comps</div></div>':'')
+      +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">This Car Est.</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--acc2)">'+fmt$(adjVal)+'</div>'+(appreciationPct!==null?'<div style="font-size:9px;color:'+(appreciationPct>0?'var(--grn)':'var(--red)')+'">'+(appreciationPct>0?'+':'')+appreciationPct.toFixed(1)+'% vs MSRP</div>':'')+'</div>'
+      +(askPrice>0?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Asking</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(askPrice)+'</div>'+(pctBelowMkt!==null?'<div style="font-size:9px;color:'+(pctBelowMkt>0?'var(--grn)':'var(--red)')+'">'+(pctBelowMkt>0?pctBelowMkt.toFixed(1)+'% below market':Math.abs(pctBelowMkt).toFixed(1)+'% above market')+'</div>':'')+'</div>':'')
+      +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Actual Mileage</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+(Number(miles||0).toLocaleString())+' mi</div><div style="font-size:9px;color:var(--tx3)">vs avg '+expMiles.toLocaleString()+' for age</div></div>'
+      +(marketData&&marketData.avg_miles?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Market Avg Miles</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+marketData.avg_miles.toLocaleString()+' mi</div></div>':'')
+      +'</div>';
+    H+='<canvas id="dep-chart" style="max-height:260px;margin-bottom:14px"></canvas>';
+    H+='<div style="display:flex;gap:14px;font-size:10px;color:var(--tx3);margin-bottom:10px;flex-wrap:wrap">'
+      +'<span><span style="display:inline-block;width:18px;height:2px;background:rgba(211,195,185,.5);vertical-align:middle;margin-right:5px"></span>Typical curve (avg miles)</span>'
+      +'<span><span style="display:inline-block;width:18px;height:2px;background:rgba(181,136,99,.9);vertical-align:middle;margin-right:5px"></span>This car (low-miles adj.)</span>'
+      +'</div>';
     H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="border-bottom:1px solid var(--bd)">';
-    ['Age','Est. Value','Annual Loss','% of MSRP','Note'].forEach(hdr=>{H+='<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:600;font-family:\'Rajdhani\',sans-serif;color:var(--tx3)">'+hdr+'</th>';});
+    ['Age','Typical Value','This Car','Annual Loss (This)','% of MSRP','Note'].forEach(hdr=>{H+='<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:600;font-family:\'Rajdhani\',sans-serif;color:var(--tx3)">'+hdr+'</th>';});
     H+='</tr></thead><tbody>';
     chartYrs.forEach((y,yi)=>{
-      const val=chartVals[yi];const pct=Math.round(val/msrpEst*100);const lost=yi>0?chartVals[yi-1]-val:0;
+      const typ=typicalVals[yi];const tc=thisCarVals[yi];const pct=Math.round(tc/anchorMsrp*100);const lost=yi>0?thisCarVals[yi-1]-tc:0;
       const isSweet=y>=swS&&y<=swE;const isCur=y===age;
-      H+='<tr style="border-bottom:1px solid rgba(211,195,185,.04);'+(isSweet?'background:rgba(109,186,125,.04)':'')+(isCur?'background:rgba(181,136,99,.06)':'')+'"><td style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-weight:600;color:'+(isCur?'var(--acc2)':'var(--tx)')+'">'+y+'yr'+(isCur?' \u2190 THIS':'')+'</td><td style="padding:5px 8px;text-align:right">'+fmt$(val)+'</td><td style="padding:5px 8px;text-align:right;color:var(--red)">'+(yi>0?'\u2013'+fmt$(lost):'\u2014')+'</td><td style="padding:5px 8px;text-align:right;color:'+(pct>70?'var(--grn)':pct>50?'var(--tx2)':'var(--tx3)')+'">'+pct+'%</td><td style="padding:5px 8px;text-align:right;font-size:10px;color:var(--tx3)">'+(isSweet?'\u2713 Sweet spot':'')+(y===0?'New price':y===1?'Steepest drop':y>=8?'Slow loss':'')+'</td></tr>';
+      const premium=tc-typ;
+      H+='<tr style="border-bottom:1px solid rgba(211,195,185,.04);'+(isSweet?'background:rgba(109,186,125,.04)':'')+(isCur?'background:rgba(181,136,99,.08)':'')+'"><td style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-weight:600;color:'+(isCur?'var(--acc2)':'var(--tx)')+'">'+y+'yr'+(isCur?' \u2190 THIS':'')+'</td><td style="padding:5px 8px;text-align:right;color:var(--tx3)">'+fmt$(typ)+'</td><td style="padding:5px 8px;text-align:right;font-weight:'+(isCur?'700':'400')+';color:'+(isCur?'var(--acc2)':'var(--tx)')+'">'+fmt$(tc)+(premium!==0&&isCur?' <span style="font-size:9px;color:'+(premium>0?'var(--grn)':'var(--red)')+'">('+(premium>0?'+':'')+fmt$(premium)+')</span>':'')+'</td><td style="padding:5px 8px;text-align:right;color:var(--red)">'+(yi>0&&lost!==0?(lost>0?'\u2013':'+')+fmt$(Math.abs(lost)):'\u2014')+'</td><td style="padding:5px 8px;text-align:right;color:'+(pct>70?'var(--grn)':pct>50?'var(--tx2)':'var(--tx3)')+'">'+pct+'%</td><td style="padding:5px 8px;text-align:right;font-size:10px;color:var(--tx3)">'+(isSweet?'\u2713 Sweet spot':'')+(y===0?'New price':y===1?'Typ. steepest drop':y>=8?'Slow loss':'')+'</td></tr>';
     });
     H+='</tbody></table></div>';
-    H+='<div style="margin-top:10px;font-size:11px;color:var(--tx2)">Optimal buy window for '+segLabel+': <strong style="color:var(--acc2)">'+swS+'–'+swE+' years old</strong> (~'+Math.round((1-chartVals[swS]/msrpEst)*100)+'% depreciation already absorbed). '+(age>=swS&&age<=swE?'<strong style="color:var(--grn)">This vehicle is in the sweet spot.</strong>':age<swS?'This vehicle is newer than ideal — more depreciation ahead.':'Older than sweet spot — value is lower but reliability planning becomes critical.')+'</div>';
+    H+='<div style="margin-top:10px;font-size:11px;color:var(--tx2)">Optimal buy window for '+segLabel+': <strong style="color:var(--acc2)">'+swS+'\u2013'+swE+' years old</strong> (~'+Math.round((1-typicalVals[swS]/anchorMsrp)*100)+'% typical depreciation absorbed). '+(age>=swS&&age<=swE?'<strong style="color:var(--grn)">This vehicle is in the sweet spot.</strong>':age<swS?'This vehicle is newer than ideal \u2014 more depreciation ahead.':'Older than sweet spot \u2014 value is lower but reliability planning becomes critical.')+'</div>';
     H+='</div></div>';
 
     // ── 14 EXIT STRATEGY ──
@@ -2348,7 +2375,10 @@ async function lookupVIN(){
       const ctx=document.getElementById('dep-chart');
       if(!ctx)return;
       if(depChart){depChart.destroy();depChart=null;}
-      depChart=new Chart(ctx,{type:'line',data:{labels:chartYrs.map(y=>y+'yr'),datasets:[{label:'Est. Value',data:chartVals,borderColor:'rgba(181,136,99,.8)',backgroundColor:'rgba(181,136,99,.08)',fill:true,tension:0.4,pointRadius:chartYrs.map(y=>y===age?7:3),pointBackgroundColor:chartYrs.map(y=>y===age?'#63ffc8':'rgba(181,136,99,.8)'),pointBorderColor:chartYrs.map(y=>y===age?'#63ffc8':'transparent'),pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},annotation:{annotations:{sweetSpot:{type:'box',xMin:swS-0.5,xMax:swE+0.5,backgroundColor:'rgba(109,186,125,.07)',borderColor:'rgba(109,186,125,.3)',borderWidth:1,label:{display:true,content:'Sweet Spot',color:'rgba(109,186,125,.7)',font:{size:10,family:"'Rajdhani',sans-serif",weight:'600'},position:{x:'center',y:'start'}}}}}},scales:{x:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10}}},y:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10},callback:v=>'$'+Math.round(v/1000)+'k'}}}}});
+      depChart=new Chart(ctx,{type:'line',data:{labels:chartYrs.map(y=>y+'yr'),datasets:[
+        {label:'Typical curve',data:typicalVals,borderColor:'rgba(211,195,185,.45)',backgroundColor:'rgba(211,195,185,.03)',fill:false,tension:0.4,borderDash:[6,4],pointRadius:2,pointBackgroundColor:'rgba(211,195,185,.45)'},
+        {label:'This car (low-miles adj.)',data:thisCarVals,borderColor:'rgba(181,136,99,.9)',backgroundColor:'rgba(181,136,99,.08)',fill:true,tension:0.4,pointRadius:chartYrs.map(y=>y===age?7:3),pointBackgroundColor:chartYrs.map(y=>y===age?'#63ffc8':'rgba(181,136,99,.8)'),pointBorderColor:chartYrs.map(y=>y===age?'#63ffc8':'transparent'),pointBorderWidth:2}
+      ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},annotation:{annotations:{sweetSpot:{type:'box',xMin:swS-0.5,xMax:swE+0.5,backgroundColor:'rgba(109,186,125,.07)',borderColor:'rgba(109,186,125,.3)',borderWidth:1,label:{display:true,content:'Sweet Spot',color:'rgba(109,186,125,.7)',font:{size:10,family:"'Rajdhani',sans-serif",weight:'600'},position:{x:'center',y:'start'}}}}}},scales:{x:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10}}},y:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10},callback:v=>'$'+Math.round(v/1000)+'k'}}}}});
     },120);
 
   }catch(err){toast('Error: '+err.message);}
