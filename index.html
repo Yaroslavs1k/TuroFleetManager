@@ -1772,7 +1772,21 @@ async function lookupVIN(){
     // "Worth Pursuing" = numbers look favorable, run real comps next.
     // "Dig Deeper"     = mixed signals, more data needed before committing.
     // "Walk"           = strong negative signals even on heuristic math.
-    const qVerdict=askPrice<=tgt&&riskScore<7&&profitMonth>0?'WORTH PURSUING':askPrice>wk||( riskScore>=8&&profitMonth<=0)?'WALK':'DIG DEEPER';
+    //
+    // Market-discount override (added after Phase 5.5 patch, 2026-04-17):
+    // Original logic only promoted to WORTH PURSUING when asking ≤ target. That missed cars
+    // priced well below live market median even when above the (conservative) target.
+    // Example: 2023 C8 3LT asking $69k, median $82k — 16% discount to market, but tool said
+    // "DIG DEEPER" because $69k > $65k target. Now any asking ≥12% below market median
+    // with acceptable risk + positive profit is upgraded to WORTH PURSUING.
+    const marketMedian=(hasLiveMarket&&marketData&&marketData.median_price)?Number(marketData.median_price):null;
+    const marketDiscPct=(marketMedian&&askPrice>0)?((marketMedian-askPrice)/marketMedian*100):null;
+    const belowMarketByMuch=marketDiscPct!==null&&marketDiscPct>=12;
+    let qVerdict;
+    if(askPrice>wk||(riskScore>=8&&profitMonth<=0))qVerdict='WALK';
+    else if(askPrice<=tgt&&riskScore<7&&profitMonth>0)qVerdict='WORTH PURSUING';
+    else if(belowMarketByMuch&&riskScore<7&&profitMonth>0&&askPrice<=mx)qVerdict='WORTH PURSUING';
+    else qVerdict='DIG DEEPER';
     const qColor=qVerdict==='WORTH PURSUING'?'var(--grn)':qVerdict==='WALK'?'var(--red)':'var(--amb)';
     const qBg=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.08)':qVerdict==='WALK'?'rgba(196,122,106,.08)':'rgba(224,159,62,.08)';
     const qBorder=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.3)':qVerdict==='WALK'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
@@ -1781,6 +1795,9 @@ async function lookupVIN(){
     if(hasLiveMarket)qReasons.push('✓ Valuation anchored on '+marketData.count+' live dealer comps (median '+fmt$(marketData.median_price)+')');
     else if(!msrpIsReal)qReasons.push('⚠️ No live MSRP or market comps — numbers are segment-default estimates. Verify before trusting.');
     if(!milesProvided)qReasons.push('⚠️ Mileage not provided — valuation assumes '+expMiles.toLocaleString()+' mi. Enter actual mileage for accurate results.');
+    if(belowMarketByMuch)qReasons.push('✓ Asking is '+marketDiscPct.toFixed(1)+'% below market median ('+fmt$(marketMedian-askPrice)+' discount)');
+    else if(marketDiscPct!==null&&marketDiscPct>0)qReasons.push('Asking is '+marketDiscPct.toFixed(1)+'% below market median');
+    else if(marketDiscPct!==null&&marketDiscPct<0)qReasons.push('⚠️ Asking is '+Math.abs(marketDiscPct).toFixed(1)+'% above market median');
     if(askPrice>mx)qReasons.push('Asking price exceeds maximum ('+fmt$(mx)+')');
     else if(askPrice<=tgt)qReasons.push('Asking price is at or below target ('+fmt$(tgt)+')');
     else qReasons.push('Asking price is between target and maximum');
@@ -1825,7 +1842,7 @@ async function lookupVIN(){
 
     // ── LIVE ASKING-PRICE SLIDER (Phase 5.5) ──
     // Expose computed context so the slider can recompute verdict client-side
-    window._vinCtx={tgt:tgt,mx:mx,wk:wk,riskScore:riskScore,profitMonth:profitMonth,baseAsk:askPrice||tgt};
+    window._vinCtx={tgt:tgt,mx:mx,wk:wk,riskScore:riskScore,profitMonth:profitMonth,baseAsk:askPrice||tgt,marketMedian:marketMedian};
     const _sliderMin=Math.max(1000,Math.round(tgt*0.7/1000)*1000);
     const _sliderMax=Math.round(wk*1.1/1000)*1000;
     const _sliderInit=askPrice||tgt;
@@ -2138,10 +2155,14 @@ function _vinSliderUpdate(val){
   // Adjust profit by amortization delta from baseAsk
   const deltaPrice=ask-ctx.baseAsk;
   const adjustedProfit=Math.round(ctx.profitMonth-(deltaPrice/60));
-  // Derive verdict
+  // Derive verdict — matches the main verdict logic including market-discount override
+  const mMed=ctx.marketMedian||null;
+  const mDisc=(mMed&&ask>0)?((mMed-ask)/mMed*100):null;
+  const belowMkt=mDisc!==null&&mDisc>=12;
   let verdict,color,bg,bd;
-  if(ask<=ctx.tgt&&ctx.riskScore<7&&adjustedProfit>0){verdict='WORTH PURSUING';color='var(--grn)';bg='rgba(109,186,125,.1)';bd='rgba(109,186,125,.35)';}
-  else if(ask>ctx.wk||(ctx.riskScore>=8&&adjustedProfit<=0)){verdict='WALK';color='var(--red)';bg='rgba(196,122,106,.1)';bd='rgba(196,122,106,.35)';}
+  if(ask>ctx.wk||(ctx.riskScore>=8&&adjustedProfit<=0)){verdict='WALK';color='var(--red)';bg='rgba(196,122,106,.1)';bd='rgba(196,122,106,.35)';}
+  else if(ask<=ctx.tgt&&ctx.riskScore<7&&adjustedProfit>0){verdict='WORTH PURSUING';color='var(--grn)';bg='rgba(109,186,125,.1)';bd='rgba(109,186,125,.35)';}
+  else if(belowMkt&&ctx.riskScore<7&&adjustedProfit>0&&ask<=ctx.mx){verdict='WORTH PURSUING';color='var(--grn)';bg='rgba(109,186,125,.1)';bd='rgba(109,186,125,.35)';}
   else{verdict='DIG DEEPER';color='var(--amb)';bg='rgba(224,159,62,.1)';bd='rgba(224,159,62,.35)';}
   // Delta vs target
   const deltaTgt=ask-ctx.tgt;
@@ -2149,9 +2170,10 @@ function _vinSliderUpdate(val){
   const el=document.getElementById('vin-slider-verdict');
   if(!el)return;
   el.style.background=bg;el.style.border='1px solid '+bd;
+  const mktLbl=mDisc!==null?(mDisc>0?mDisc.toFixed(1)+'% below market':Math.abs(mDisc).toFixed(1)+'% above market'):'';
   el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
     +'<div><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:'+color+';line-height:1.1">'+verdict+'</div>'
-    +'<div style="font-size:10px;color:var(--tx3);margin-top:3px">At this price: '+deltaLbl+'</div></div>'
+    +'<div style="font-size:10px;color:var(--tx3);margin-top:3px">At this price: '+deltaLbl+(mktLbl?' &middot; <span style="color:'+(mDisc>=12?'var(--grn)':mDisc<0?'var(--red)':'var(--tx3)')+'">'+mktLbl+'</span>':'')+'</div></div>'
     +'<div style="text-align:right"><div style="font-size:10px;color:var(--tx3)">Est. monthly profit</div><div style="font-family:Rajdhani,sans-serif;font-size:17px;font-weight:700;color:'+(adjustedProfit>0?'var(--grn)':'var(--red)')+'">'+fmt$(adjustedProfit)+'</div></div>'
     +'</div>';
 }
