@@ -105,21 +105,35 @@ serve(async (req) => {
       // Fallback: search endpoint (client will filter by exact VIN match)
       endpoint = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&vins=${vin}`;
     } else {
-      // Default: market comps for same year/make/model in ZIP radius
-      // First decode to get year/make/model, then search comps
+      // Default: market comps for same year/make/model in ZIP radius.
+      // Some VINs fail MarketCheck decode (422) even though NHTSA decodes them fine. When
+      // that happens, the client can pass year/make/model overrides in the query string
+      // so we can still run the comps search.
+      const overrideYear = url.searchParams.get("year");
+      const overrideMake = url.searchParams.get("make");
+      const overrideModel = url.searchParams.get("model");
+
+      let specs: any = {};
       const decodeRes = await fetch(
         `https://mc-api.marketcheck.com/v2/decode/car/${vin}/specs?api_key=${MARKETCHECK_KEY}`
       );
-      if (!decodeRes.ok) {
+      if (decodeRes.ok) {
+        specs = await decodeRes.json();
+      }
+      // If MarketCheck can't decode AND we have no override, bail with a hint so client retries
+      if (!decodeRes.ok && !(overrideYear && overrideMake && overrideModel)) {
         return new Response(
-          JSON.stringify({ error: "VIN decode failed", status: decodeRes.status }),
+          JSON.stringify({
+            error: "VIN decode failed",
+            status: decodeRes.status,
+            hint: "Retry with &year=...&make=...&model=... to bypass MarketCheck decode"
+          }),
           { status: decodeRes.status, headers: { ...corsHeaders(origin), "Content-Type": "application/json" } }
         );
       }
-      const specs = await decodeRes.json();
-      const year = specs.year;
-      const make = specs.make;
-      const modelRaw = specs.model || "";
+      const year = overrideYear || specs.year;
+      const make = overrideMake || specs.make;
+      const modelRaw = overrideModel || specs.model || "";
 
       // Strip trailing body-style words — MarketCheck decode returns "M4 Convertible" or
       // "3 Series Sedan" but dealer listings use just "M4" / "3 Series". Without this,

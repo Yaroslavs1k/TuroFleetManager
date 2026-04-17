@@ -1611,7 +1611,12 @@ async function lookupVIN(){
     let autoListingUrl='';
     let autoListingMeta=null;
     try{
-      const mcRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
+      let mcRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
+      // If MarketCheck decode failed (422), retry with NHTSA's year/make/model as override
+      if(mcRes.status===422&&cv.year&&cv.make&&cv.model){
+        const fallbackUrl='https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip)+'&year='+encodeURIComponent(cv.year)+'&make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model);
+        mcRes=await fetch(fallbackUrl);
+      }
       if(mcRes.ok){
         const mcJson=await mcRes.json();
         if(mcJson && mcJson.count>0 && mcJson.median_price>0){
