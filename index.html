@@ -1678,7 +1678,46 @@ async function lookupVIN(){
     const SEG_DEFAULT_MSRP=isSport?72000:isLux?58000:isTruck?48000:26000;
     const msrpEst=cv.basePrice>0?cv.basePrice:SEG_DEFAULT_MSRP;
     const msrpIsReal=cv.basePrice>0;
-    const DEP_Y=isSport?[.15,.09,.09,.08,.08,.07,.07,.06,.06,.06]:isLux?[.22,.13,.13,.12,.12,.10,.09,.08,.08,.07]:isTruck?[.15,.11,.11,.10,.10,.09,.08,.07,.07,.06]:[.18,.12,.12,.11,.11,.09,.08,.08,.07,.07];
+    // Annual depreciation rates by segment — updated 2026-04 using:
+    //   - iSeeCars "Which Cars Hold Value Best" 5yr study (2024)
+    //   - Edmunds "5-Year Cost to Own" segment averages (2024)
+    //   - Black Book residual value quarterly (Q4 2024)
+    // Each array's cumulative product across 5 years should approximate published 5yr residual.
+    // Sport 5yr cumulative: 1-(0.84*0.91*0.92*0.93*0.93) = 38% loss (iSeeCars sports avg: 35-42%)
+    // Luxury 5yr cumulative: 1-(0.76*0.88*0.89*0.91*0.92) = 50% loss (iSeeCars luxury avg: 48-55%)
+    // Truck 5yr cumulative: 1-(0.86*0.91*0.92*0.93*0.94) = 37% loss (iSeeCars truck avg: 33-38%)
+    // Economy 5yr cumulative: 1-(0.84*0.89*0.91*0.92*0.93) = 42% loss (iSeeCars avg-car: 38-43%)
+    const DEP_Y=isSport?[.16,.09,.08,.07,.07,.06,.06,.05,.05,.05]
+                :isLux?[.24,.12,.11,.09,.08,.07,.07,.06,.06,.06]
+                :isTruck?[.14,.09,.08,.07,.06,.06,.05,.05,.05,.04]
+                :[.16,.11,.09,.08,.07,.07,.06,.06,.06,.05];
+
+    // Feature / option premiums — adjust MSRP anchor upward for known-significant options.
+    // Only applied when VIN decode or MarketCheck specs identifies the option. Otherwise assumes base.
+    const trimRaw=(cv.trim||'').toString().toUpperCase();
+    const mctrim=((marketData&&marketData.specs&&marketData.specs.trim)||'').toString().toUpperCase();
+    const allTrim=(trimRaw+' '+mctrim).trim();
+    let featurePremium=0;
+    const featureNotes=[];
+    // Corvette-specific premiums
+    if(/CORVETTE/i.test(cv.model||'')){
+      if(/\bZ51\b/.test(allTrim)){featurePremium+=5995;featureNotes.push('Z51 Performance Pkg +$5,995');}
+      if(/\b3LT\b/.test(allTrim)){featurePremium+=9100;featureNotes.push('3LT trim +$9,100 over base');}
+      else if(/\b2LT\b|PREFERRED/.test(allTrim)){featurePremium+=5250;featureNotes.push('2LT trim +$5,250 over base');}
+      if(/CONVERTIBLE|CABRIOLET/.test(allTrim+' '+(cv.body||'').toUpperCase())){featurePremium+=7500;featureNotes.push('Convertible body +$7,500');}
+    }
+    // BMW M / AMG / R-Design / ///M Sport Competition premiums
+    if(/\bM3\b|\bM4\b|\bM5\b|\bM8\b/.test(cv.model||'')){
+      if(/COMPETITION|\bCOMP\b/.test(allTrim)){featurePremium+=4500;featureNotes.push('M Competition +$4,500');}
+      if(/XDRIVE/.test(allTrim)){featurePremium+=3500;featureNotes.push('xDrive AWD +$3,500');}
+    }
+    if(/\bAMG\b/.test(allTrim)||/\bAMG\b/.test(cv.make||'')){featurePremium+=6000;featureNotes.push('AMG performance +$6,000');}
+    // Porsche trim premiums
+    if(/PORSCHE/i.test(cv.make||'')){
+      if(/\bTURBO\b/.test(allTrim)){featurePremium+=15000;featureNotes.push('Turbo trim +$15,000');}
+      else if(/\bGTS\b/.test(allTrim)){featurePremium+=8500;featureNotes.push('GTS trim +$8,500');}
+      else if(/\bS\b.{0,10}$/.test(allTrim)){featurePremium+=4500;featureNotes.push('S trim +$4,500');}
+    }
     let curVal=msrpEst;
     for(let i=0;i<Math.min(age,DEP_Y.length);i++) curVal*=(1-DEP_Y[i]);
     curVal=Math.round(curVal);
@@ -1810,7 +1849,9 @@ async function lookupVIN(){
     // Rendering both prevents the chart from looking like the car "appreciated" when it really
     // just held value better than the generic model because of low miles.
     const liveMsrp=(marketData&&marketData.specs&&marketData.specs.msrp)?parseFloat(marketData.specs.msrp)||0:0;
-    const anchorMsrp=liveMsrp>0?liveMsrp:msrpEst;
+    // Base MSRP from live data or segment estimate, then add identified option premiums
+    const baseMsrp=liveMsrp>0?liveMsrp:msrpEst;
+    const anchorMsrp=baseMsrp+featurePremium;
     const chartYrs=Array.from({length:12},(_,i)=>i);
     const typicalVals=chartYrs.map(y=>{
       let v=anchorMsrp;
@@ -2238,17 +2279,22 @@ async function lookupVIN(){
     H+='<div style="margin-bottom:14px">'+SH('13','Best Age to Buy \u2014 Depreciation Curve');
     H+='<div class="cd">';
     // Reference data panel — all the price/market numbers at a glance
-    const refMsrpLabel=liveMsrp>0?'MSRP (live)':'MSRP (est.)';
+    const refMsrpLabel=liveMsrp>0?'MSRP (live, as-built)':'MSRP (est., as-built)';
     const pctBelowMkt=hasLiveMarket&&askPrice>0?((marketData.median_price-askPrice)/marketData.median_price*100):null;
     const appreciationPct=hasLiveMarket?((adjVal/anchorMsrp-1)*100):null;
     H+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px;padding:11px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">'
-      +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">'+refMsrpLabel+'</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(anchorMsrp)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">'+refMsrpLabel+'</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(anchorMsrp)+'</div>'+(featurePremium>0?'<div style="font-size:9px;color:var(--grn)">Base '+fmt$(baseMsrp)+' + options '+fmt$(featurePremium)+'</div>':'')+'</div>'
       +(hasLiveMarket?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Market Median</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(marketData.median_price)+'</div><div style="font-size:9px;color:var(--tx3)">'+marketData.count+' live comps</div></div>':'')
       +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">This Car Est.</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--acc2)">'+fmt$(adjVal)+'</div>'+(appreciationPct!==null?'<div style="font-size:9px;color:'+(appreciationPct>0?'var(--grn)':'var(--red)')+'">'+(appreciationPct>0?'+':'')+appreciationPct.toFixed(1)+'% vs MSRP</div>':'')+'</div>'
       +(askPrice>0?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Asking</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+fmt$(askPrice)+'</div>'+(pctBelowMkt!==null?'<div style="font-size:9px;color:'+(pctBelowMkt>0?'var(--grn)':'var(--red)')+'">'+(pctBelowMkt>0?pctBelowMkt.toFixed(1)+'% below market':Math.abs(pctBelowMkt).toFixed(1)+'% above market')+'</div>':'')+'</div>':'')
       +'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Actual Mileage</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+(Number(miles||0).toLocaleString())+' mi</div><div style="font-size:9px;color:var(--tx3)">vs avg '+expMiles.toLocaleString()+' for age</div></div>'
       +(marketData&&marketData.avg_miles?'<div><div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700">Market Avg Miles</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:17px;font-weight:700;color:var(--tx)">'+marketData.avg_miles.toLocaleString()+' mi</div></div>':'')
       +'</div>';
+    if(featureNotes.length){
+      H+='<div style="margin-bottom:10px;font-size:10px;color:var(--tx2);background:rgba(99,255,200,.04);border:1px solid rgba(99,255,200,.2);border-radius:6px;padding:7px 10px"><strong style="color:var(--grn);letter-spacing:.5px">Options detected:</strong> '+featureNotes.map(n=>esc(n)).join(' &middot; ')+'</div>';
+    } else {
+      H+='<div style="margin-bottom:10px;font-size:10px;color:var(--tx3);background:var(--sf);border:1px dashed var(--bd);border-radius:6px;padding:7px 10px">No significant option premiums detected from VIN. MSRP anchor assumes base trim \u2014 real value may be higher if the car has packages like Z51, Competition, AMG, etc.</div>';
+    }
     H+='<canvas id="dep-chart" style="max-height:260px;margin-bottom:14px"></canvas>';
     H+='<div style="display:flex;gap:14px;font-size:10px;color:var(--tx3);margin-bottom:10px;flex-wrap:wrap">'
       +'<span><span style="display:inline-block;width:18px;border-top:1.5px dotted rgba(99,255,200,.7);vertical-align:middle;margin-right:5px"></span>MSRP ('+fmt$(anchorMsrp)+')</span>'
