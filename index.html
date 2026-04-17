@@ -1543,6 +1543,24 @@ async function lookupVIN(){
     const nhtsaBasePrice=parseFloat(v.BasePrice)||0;
     cv={vin,miles,zip,pp,year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,trans:v.TransmissionStyle,basePrice:nhtsaBasePrice};
 
+    // ── Live Market Comps (MarketCheck via Supabase Edge Function) ──
+    // Returns real dealer listings for same year/make/model in ZIP radius.
+    // This is the single biggest confidence upgrade — replaces segment-default math with actual market.
+    let marketData=null;
+    try{
+      const mcRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
+      if(mcRes.ok){
+        const mcJson=await mcRes.json();
+        if(mcJson && mcJson.count>0 && mcJson.median_price>0){
+          marketData=mcJson;
+          // Promote real MSRP from MarketCheck if NHTSA didn't give us one
+          if(!cv.basePrice && marketData.specs && marketData.specs.msrp){
+            cv.basePrice=parseFloat(marketData.specs.msrp)||0;
+          }
+        }
+      }
+    }catch(e){/* offline or proxy down — fall back to depreciation math */}
+
     // ── Classification ──
     const mkUP=cv.make.toUpperCase();
     const mdUP=cv.model.toUpperCase();
@@ -1570,14 +1588,25 @@ async function lookupVIN(){
     const actMiles=milesProvided?parseInt(miles):expMiles;
     const miDiff=expMiles>0?(expMiles-actMiles)/expMiles:0;
     const miAdj=miDiff>0.5?0.20:miDiff>0.25?0.12:miDiff>0.10?0.07:miDiff<-0.50?-0.20:miDiff<-0.25?-0.12:miDiff<-0.10?-0.07:0;
-    const adjVal=Math.round(curVal*(1+miAdj));
+    const depVal=Math.round(curVal*(1+miAdj)); // Depreciation-based estimate (fallback)
+    // If we have live market data, use median dealer price adjusted for this car's mileage vs market avg mileage
+    let adjVal=depVal;
+    let valSource='depreciation-estimate';
+    if(marketData && marketData.median_price>0){
+      const mktAvgMi=marketData.avg_miles||expMiles;
+      const mktMiDiff=mktAvgMi>0?(mktAvgMi-actMiles)/mktAvgMi:0;
+      const mktMiAdj=mktMiDiff>0.3?0.12:mktMiDiff>0.15?0.06:mktMiDiff<-0.3?-0.12:mktMiDiff<-0.15?-0.06:0;
+      adjVal=Math.round(marketData.median_price*(1+mktMiAdj));
+      valSource='live-market-'+marketData.count+'-comps';
+    }
     const depPct=Math.round((1-curVal/msrpEst)*100);
     const askPrice=parseInt(pp)||adjVal;
     const tgt=Math.round(adjVal*0.90);
     const mx=Math.round(adjVal*0.97);
     const wk=Math.round(adjVal*1.06);
-    // Confidence flag — used later to downgrade verdict language when data quality is low
-    const dataConfidence=(msrpIsReal?1:0)+(milesProvided?1:0);  // 2=high, 1=medium, 0=low
+    // Confidence: real MSRP + mileage provided + live market comps (0-3 scale)
+    const hasLiveMarket=!!(marketData && marketData.median_price>0);
+    const dataConfidence=(msrpIsReal?1:0)+(milesProvided?1:0)+(hasLiveMarket?1:0);  // 3=high, 2=good, 1=medium, 0=low
 
     // ── Recalls + Complaints (parallel) ──
     let recalls=[],complaints=[];
@@ -1726,8 +1755,8 @@ async function lookupVIN(){
     else qReasons.push('Estimated monthly loss: '+fmt$(profitMonth));
     if(monthsBE<999)qReasons.push('Break-even in ~'+monthsBE+' months');
     // Pre-flight checklist — must be completed before verdict can be trusted for a real purchase
-    const confLabel=dataConfidence===2?'HIGH':dataConfidence===1?'MEDIUM':'LOW';
-    const confColor=dataConfidence===2?'var(--grn)':dataConfidence===1?'var(--amb)':'var(--red)';
+    const confLabel=dataConfidence>=3?'HIGH':dataConfidence===2?'GOOD':dataConfidence===1?'MEDIUM':'LOW';
+    const confColor=dataConfidence>=3?'var(--grn)':dataConfidence===2?'var(--grn)':dataConfidence===1?'var(--amb)':'var(--red)';
     H+='<div style="margin-bottom:20px;background:'+qBg+';border:2px solid '+qBorder+';border-radius:10px;padding:16px">'
       +'<div style="display:flex;align-items:center;gap:14px">'
       +'<div style="font-size:42px;flex-shrink:0;line-height:1">'+qIcon+'</div>'
@@ -1781,8 +1810,41 @@ async function lookupVIN(){
     H+='<div style="text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Mileage-Adjusted</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--grn)">'+fmt$(adjVal)+'</div><div style="font-size:10px;color:'+(miAdj>0?'var(--grn)':miAdj<0?'var(--red)':'var(--tx3)')+'">'+( miAdj>0?'+'+(miAdj*100).toFixed(0)+'% low-mile premium':miAdj<0?(miAdj*100).toFixed(0)+'% high-mile discount':'At avg mileage')+'</div></div>';
     H+='</div><div style="margin-bottom:8px;font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3)">CONDITION RANGE (KBB EQUIVALENT)</div><div class="g4">';
     ['Rough','Fair','Good','Excellent'].forEach((cond,ci)=>{const cv2=Math.round(adjVal*[0.78,0.87,1.00,1.12][ci]);H+='<div style="text-align:center;padding:8px;background:var(--sf);border-radius:var(--rs);border:1px solid '+(cond==='Good'?'var(--acc2)':'var(--bd)')+'"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px">'+cond+'</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:15px;font-weight:700;color:'+(cond==='Good'?'var(--acc2)':'var(--tx)')+'">'+fmt$(cv2)+'</div></div>';});
-    H+='</div><div style="margin-top:8px;font-size:10px;color:var(--tx3)">Estimates based on segment depreciation model. Always verify: <a href="https://www.kbb.com/'+ml+'/'+mdl+'/'+cv.year+'/" target="_blank" style="color:var(--acc2)">KBB</a> &bull; <a href="https://www.edmunds.com/'+ml+'/'+mdl+'/'+cv.year+'/appraisal-value/" target="_blank" style="color:var(--acc2)">Edmunds</a></div>';
+    H+='</div><div style="margin-top:8px;font-size:10px;color:var(--tx3)">'+(hasLiveMarket?'<span style="color:var(--grn);font-weight:700">✓ Mileage-Adjusted anchored on '+marketData.count+' live dealer comps</span> ':'Estimates based on segment depreciation model. ')+'Always verify: <a href="https://www.kbb.com/'+ml+'/'+mdl+'/'+cv.year+'/" target="_blank" style="color:var(--acc2)">KBB</a> &bull; <a href="https://www.edmunds.com/'+ml+'/'+mdl+'/'+cv.year+'/appraisal-value/" target="_blank" style="color:var(--acc2)">Edmunds</a></div>';
     H+='</div></div>';
+
+    // ── 03b LIVE DEALER COMPS (MarketCheck) ──
+    if(hasLiveMarket){
+      H+='<div style="margin-bottom:14px">'+SH('03b','Live Dealer Comps \u2014 '+zip+' radius');
+      H+='<div class="cd"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">';
+      H+='<div class="metric-box"><div class="metric-val" style="color:var(--grn)">'+marketData.count+'</div><div class="metric-lbl">Active Listings</div></div>';
+      H+='<div class="metric-box"><div class="metric-val" style="color:var(--acc2)">'+fmt$(marketData.median_price)+'</div><div class="metric-lbl">Median Asking</div></div>';
+      H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx2)">'+fmt$(marketData.avg_price)+'</div><div class="metric-lbl">Average Asking</div></div>';
+      H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx2)">'+fmt$(marketData.min_price)+' \u2013 '+fmt$(marketData.max_price)+'</div><div class="metric-lbl">Min \u2013 Max</div></div>';
+      H+='<div class="metric-box"><div class="metric-val" style="color:var(--tx2)">'+(marketData.avg_miles?marketData.avg_miles.toLocaleString():'—')+'</div><div class="metric-lbl">Avg Miles</div></div>';
+      H+='</div>';
+      // Asking vs market delta
+      if(askPrice && marketData.median_price){
+        const delta=askPrice-marketData.median_price;
+        const deltaPct=Math.round(delta/marketData.median_price*100);
+        const dCol=delta<=0?'var(--grn)':deltaPct<5?'var(--amb)':'var(--red)';
+        const dLabel=delta<0?'below market median':delta===0?'at market median':'above market median';
+        H+='<div style="padding:10px;background:rgba(0,0,0,.15);border-radius:6px;margin-bottom:10px;font-size:11px;color:var(--tx2)"><strong style="color:'+dCol+'">'+(delta>=0?'+':'')+fmt$(delta)+' ('+(deltaPct>=0?'+':'')+deltaPct+'%)</strong> vs median. This car is <strong style="color:'+dCol+'">'+dLabel+'</strong> of '+marketData.count+' comparable listings.</div>';
+      }
+      // Top listings table
+      if(marketData.listings && marketData.listings.length){
+        H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:6px">TOP '+Math.min(marketData.listings.length,10)+' LOCAL LISTINGS</div>';
+        H+='<div style="display:grid;grid-template-columns:1fr;gap:5px">';
+        marketData.listings.forEach(l=>{
+          const diff=l.price-marketData.median_price;
+          const dc=diff<=0?'var(--grn)':diff<marketData.median_price*0.08?'var(--tx3)':'var(--red)';
+          H+='<div style="display:grid;grid-template-columns:90px 90px 1fr auto;gap:10px;padding:7px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;font-size:11px;align-items:center"><div style="font-family:\'Rajdhani\',sans-serif;font-weight:700;color:'+dc+'">'+fmt$(l.price)+'</div><div style="color:var(--tx3)">'+(l.miles?l.miles.toLocaleString()+' mi':'—')+'</div><div style="color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.dealer||'Unknown dealer')+' &bull; '+(l.city||'')+(l.state?', '+l.state:'')+'</div>'+(l.vdp_url?'<a href="'+l.vdp_url+'" target="_blank" class="btn btn-s btn-o" style="text-decoration:none;padding:3px 8px;font-size:10px">View</a>':'')+'</div>';
+        });
+        H+='</div>';
+      }
+      H+='<div style="margin-top:10px;font-size:10px;color:var(--tx3)">Data: MarketCheck (live dealer inventory) &bull; radius 100 mi from '+zip+' &bull; valuation anchored on median, adjusted for this vehicle\'s mileage vs market avg.</div>';
+      H+='</div></div>';
+    }
 
     // ── 05 TURO MARKET DATA ──
     H+='<div style="margin-bottom:14px">'+SH('05','Turo Market Data \u2014 '+mkt);
