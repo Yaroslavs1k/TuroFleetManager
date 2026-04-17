@@ -1,6 +1,6 @@
 {
     "name": "turo-fleet-manager",
-    "version": "4.0.0",
+    "version": "6.0.0",
     "description": "Turo Fleet Manager — Las Vegas Fleet Dashboard",
     "main": "main.js",
     "author": "Turo Fleet Manager",
