@@ -2201,10 +2201,16 @@ async function lookupVIN(){
         +'<a class="btn btn-r" href="'+esc(finalListingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing &rarr;</a>'
         +'</div>';
     } else {
+      // Edmunds VIN-direct URL pattern verified 2026-04-17: edmunds.com/{make}/{model}/{year}/vin/{VIN}/
+      // Indexes most franchise-dealer-listed VINs. Returns 404 if the car was never on Edmunds.
+      const eMake=(cv.make||'').toLowerCase().replace(/\s+/g,'-');
+      const eModel=(cv.model||'').toLowerCase().replace(/\s+/g,'-');
+      const edmundsVinUrl='https://www.edmunds.com/'+encodeURIComponent(eMake)+'/'+encodeURIComponent(eModel)+'/'+cv.year+'/vin/'+encodeURIComponent(vin)+'/';
       H+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
-        +'<div style="flex:1;min-width:200px;font-size:11px;color:var(--tx3);line-height:1.5">This VIN isn\'t in MarketCheck\'s dealer index. Hunt for it on the web:</div>'
+        +'<div style="flex:1;min-width:200px;font-size:11px;color:var(--tx3);line-height:1.5">This VIN isn\'t in MarketCheck\'s dealer index. Try these \u2014 the Edmunds link goes directly to a VIN-specific page if it\'s indexed:</div>'
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-        +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22+for+sale" target="_blank" rel="noopener" style="text-decoration:none">Search Google</a>'
+        +'<a class="btn btn-r btn-s" href="'+esc(edmundsVinUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Edmunds (VIN direct)</a>'
+        +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22" target="_blank" rel="noopener" style="text-decoration:none">Google VIN</a>'
         +'<a class="btn btn-o btn-s" href="https://www.autotempest.com/results?vin='+encodeURIComponent(vin)+'" target="_blank" rel="noopener" style="text-decoration:none">AutoTempest</a>'
         +'<a class="btn btn-o btn-s" href="https://www.cars.com/research/'+encodeURIComponent((cv.make||'').toLowerCase().replace(/\s+/g,'_'))+'-'+encodeURIComponent((cv.model||'').toLowerCase().replace(/\s+/g,'_'))+'-'+cv.year+'/" target="_blank" rel="noopener" style="text-decoration:none">Cars.com</a>'
         +'</div></div>';
