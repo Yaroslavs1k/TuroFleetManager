@@ -2295,12 +2295,20 @@ async function lookupVIN(){
     } else {
       H+='<div style="margin-bottom:10px;font-size:10px;color:var(--tx3);background:var(--sf);border:1px dashed var(--bd);border-radius:6px;padding:7px 10px">No significant option premiums detected from VIN. MSRP anchor assumes base trim \u2014 real value may be higher if the car has packages like Z51, Competition, AMG, etc.</div>';
     }
-    H+='<canvas id="dep-chart" style="max-height:260px;margin-bottom:14px"></canvas>';
-    H+='<div style="display:flex;gap:14px;font-size:10px;color:var(--tx3);margin-bottom:10px;flex-wrap:wrap">'
-      +'<span><span style="display:inline-block;width:18px;border-top:1.5px dotted rgba(99,255,200,.7);vertical-align:middle;margin-right:5px"></span>MSRP ('+fmt$(anchorMsrp)+')</span>'
-      +'<span><span style="display:inline-block;width:18px;border-top:2px dashed rgba(211,195,185,.6);vertical-align:middle;margin-right:5px"></span>Typical curve (avg miles)</span>'
-      +'<span><span style="display:inline-block;width:18px;height:2px;background:rgba(181,136,99,.9);vertical-align:middle;margin-right:5px"></span>This car (low-miles adj.)</span>'
-      +'</div>';
+    // Interactive toggle chips — click to show/hide each curve on the chart below.
+    // Datasets map by index: 0=MSRP, 1=Asking, 2=Opening Offer, 3=Typical curve, 4=This car
+    const chipStyle='display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:16px;border:1px solid var(--bd);background:var(--sf);font-size:10px;color:var(--tx2);cursor:pointer;user-select:none;transition:all .15s;font-family:\'Plus Jakarta Sans\',sans-serif';
+    const chipActive='box-shadow:inset 0 0 0 1px var(--acc2);background:rgba(181,136,99,.1);color:var(--tx)';
+    H+='<div style="margin-bottom:10px">'
+      +'<div style="font-size:9px;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Show / Hide Lines</div>'
+      +'<div id="dep-chips" style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<span class="dep-chip" data-ds="0" style="'+chipStyle+';'+chipActive+'"><span style="display:inline-block;width:14px;border-top:1.5px dotted rgba(99,255,200,.8)"></span>MSRP '+fmt$(anchorMsrp)+'</span>'
+      +(askPrice>0?'<span class="dep-chip" data-ds="1" style="'+chipStyle+';'+chipActive+'"><span style="display:inline-block;width:14px;border-top:2px dashed rgba(224,159,62,.8)"></span>Asking '+fmt$(askPrice)+'</span>':'')
+      +(askPrice>0&&openingOffer>0?'<span class="dep-chip" data-ds="2" style="'+chipStyle+';'+chipActive+'"><span style="display:inline-block;width:14px;border-top:2px dashed rgba(109,186,125,.85)"></span>Your Offer '+fmt$(openingOffer)+'</span>':'')
+      +'<span class="dep-chip" data-ds="3" style="'+chipStyle+';'+chipActive+'"><span style="display:inline-block;width:14px;border-top:2px dashed rgba(211,195,185,.6)"></span>Typical curve</span>'
+      +'<span class="dep-chip" data-ds="4" style="'+chipStyle+';'+chipActive+'"><span style="display:inline-block;width:14px;height:2px;background:rgba(181,136,99,.9)"></span>This car (low-mi adj.)</span>'
+      +'</div></div>';
+    H+='<canvas id="dep-chart" style="max-height:280px;margin-bottom:14px"></canvas>';
     H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="border-bottom:1px solid var(--bd)">';
     ['Age','Typical Value','This Car','Annual Loss (This)','% of MSRP','Note'].forEach(hdr=>{H+='<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:600;font-family:\'Rajdhani\',sans-serif;color:var(--tx3)">'+hdr+'</th>';});
     H+='</tr></thead><tbody>';
@@ -2423,11 +2431,33 @@ async function lookupVIN(){
       if(!ctx)return;
       if(depChart){depChart.destroy();depChart=null;}
       const msrpLine=chartYrs.map(()=>anchorMsrp);
+      const askLine=chartYrs.map(()=>askPrice||null);
+      const offerLine=chartYrs.map(()=>openingOffer||null);
+      // Datasets in a FIXED order — chip data-ds indexes reference these directly.
+      // 0=MSRP, 1=Asking, 2=Opening Offer, 3=Typical curve, 4=This car
       depChart=new Chart(ctx,{type:'line',data:{labels:chartYrs.map(y=>y+'yr'),datasets:[
         {label:'MSRP',data:msrpLine,borderColor:'rgba(99,255,200,.55)',backgroundColor:'transparent',fill:false,tension:0,borderDash:[2,3],pointRadius:0,borderWidth:1.5},
+        {label:'Asking',data:askLine,borderColor:'rgba(224,159,62,.75)',backgroundColor:'transparent',fill:false,tension:0,borderDash:[5,4],pointRadius:0,borderWidth:1.5,hidden:askPrice<=0},
+        {label:'Your Offer',data:offerLine,borderColor:'rgba(109,186,125,.85)',backgroundColor:'transparent',fill:false,tension:0,borderDash:[5,4],pointRadius:0,borderWidth:1.5,hidden:!(askPrice>0&&openingOffer>0)},
         {label:'Typical curve',data:typicalVals,borderColor:'rgba(211,195,185,.45)',backgroundColor:'rgba(211,195,185,.03)',fill:false,tension:0.4,borderDash:[6,4],pointRadius:2,pointBackgroundColor:'rgba(211,195,185,.45)'},
         {label:'This car (low-miles adj.)',data:thisCarVals,borderColor:'rgba(181,136,99,.9)',backgroundColor:'rgba(181,136,99,.08)',fill:true,tension:0.4,pointRadius:chartYrs.map(y=>y===age?7:3),pointBackgroundColor:chartYrs.map(y=>y===age?'#63ffc8':'rgba(181,136,99,.8)'),pointBorderColor:chartYrs.map(y=>y===age?'#63ffc8':'transparent'),pointBorderWidth:2}
       ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},annotation:{annotations:{sweetSpot:{type:'box',xMin:swS-0.5,xMax:swE+0.5,backgroundColor:'rgba(109,186,125,.07)',borderColor:'rgba(109,186,125,.3)',borderWidth:1,label:{display:true,content:'Sweet Spot',color:'rgba(109,186,125,.7)',font:{size:10,family:"'Rajdhani',sans-serif",weight:'600'},position:{x:'center',y:'start'}}}}}},scales:{x:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10}}},y:{grid:{color:'rgba(211,195,185,.06)'},ticks:{color:'rgba(211,195,185,.4)',font:{size:10},callback:v=>'$'+Math.round(v/1000)+'k'}}}}});
+
+      // Wire chip click handlers — toggle dataset visibility + chip active style
+      const chips=document.querySelectorAll('#dep-chips .dep-chip');
+      const chipBase='display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:16px;border:1px solid var(--bd);background:var(--sf);font-size:10px;color:var(--tx2);cursor:pointer;user-select:none;transition:all .15s;font-family:\'Plus Jakarta Sans\',sans-serif';
+      const chipOnSuffix=';box-shadow:inset 0 0 0 1px var(--acc2);background:rgba(181,136,99,.1);color:var(--tx)';
+      const chipOffSuffix=';opacity:.45';
+      chips.forEach(chip=>{
+        chip.addEventListener('click',()=>{
+          const idx=parseInt(chip.getAttribute('data-ds'));
+          if(!depChart)return;
+          const ds=depChart.data.datasets[idx];if(!ds)return;
+          ds.hidden=!ds.hidden;
+          depChart.update();
+          chip.setAttribute('style',chipBase+(ds.hidden?chipOffSuffix:chipOnSuffix));
+        });
+      });
     },120);
 
   }catch(err){toast('Error: '+err.message);}
