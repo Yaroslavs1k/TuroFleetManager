@@ -1644,7 +1644,36 @@ async function lookupVIN(){
     }
     // Parse real MSRP from NHTSA BasePrice when available (avoids segment-default guessing)
     const nhtsaBasePrice=parseFloat(v.BasePrice)||0;
-    cv={vin,miles,zip,pp,year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,trans:v.TransmissionStyle,basePrice:nhtsaBasePrice};
+    // Extended NHTSA field extraction — safety + features (ABS, ESC, adaptive cruise, etc.)
+    // Many fields return "Not Applicable" or blank — normalized to null in normalize() below.
+    const normalize=(val)=>{if(!val)return null;const s=String(val).trim();if(!s||s==='Not Applicable'||s==='0')return null;return s;};
+    const airbagCount=[v.AirBagLocFront,v.AirBagLocSide,v.AirBagLocCurtain,v.AirBagLocKnee,v.AirBagLocSeatCushion]
+      .map(normalize).filter(x=>x).length;
+    cv={
+      vin,miles,zip,pp,
+      year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',
+      body:v.BodyClass,doors:v.Doors,seats:normalize(v.SeatingCapacity),
+      drive:v.DriveType,
+      engine:v.DisplacementL?v.DisplacementL+'L':'',
+      cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,
+      fuel:v.FuelTypePrimary,
+      plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),
+      gvwr:v.GVWR,curbWeight:normalize(v.CurbWeightLB),
+      wheelbase:normalize(v.WheelBaseLong)||normalize(v.WheelBaseShort),
+      trans:v.TransmissionStyle,
+      // Safety features
+      airbags:airbagCount>0?airbagCount:null,
+      abs:normalize(v.ABS),
+      esc:normalize(v.ESC),
+      tcs:normalize(v.TractionControl),
+      adaptiveCruise:normalize(v.AdaptiveCruiseControl),
+      ldw:normalize(v.LaneDepartureWarning)||normalize(v.LaneKeepSystem),
+      bsw:normalize(v.BlindSpotMon)||normalize(v.BlindSpotIntervention),
+      fcw:normalize(v.ForwardCollisionWarning)||normalize(v.CIB),
+      aeb:normalize(v.AutoReverseSystem)||normalize(v.DynamicBrakeSupport),
+      parkAssist:normalize(v.ParkAssist)||normalize(v.RearVisibilitySystem),
+      basePrice:nhtsaBasePrice
+    };
 
     // ── Live Market Comps (MarketCheck via Supabase Edge Function) ──
     // Returns real dealer listings for same year/make/model in ZIP radius.
@@ -1767,6 +1796,69 @@ async function lookupVIN(){
       if(/\bTURBO\b/.test(allTrim)){featurePremium+=15000;featureNotes.push('Turbo trim +$15,000');}
       else if(/\bGTS\b/.test(allTrim)){featurePremium+=8500;featureNotes.push('GTS trim +$8,500');}
       else if(/\bS\b.{0,10}$/.test(allTrim)){featurePremium+=4500;featureNotes.push('S trim +$4,500');}
+    }
+    // Ford Mustang — GT / Mach 1 / Shelby
+    if(/MUSTANG/i.test(cv.model||'')){
+      if(/SHELBY.*GT500|GT500/i.test(allTrim)){featurePremium+=20000;featureNotes.push('Shelby GT500 +$20,000');}
+      else if(/SHELBY.*GT350|GT350/i.test(allTrim)){featurePremium+=12000;featureNotes.push('Shelby GT350 +$12,000');}
+      else if(/MACH\s*1/i.test(allTrim)){featurePremium+=8000;featureNotes.push('Mach 1 +$8,000');}
+      else if(/\bGT\b/.test(allTrim)){featurePremium+=4500;featureNotes.push('GT trim +$4,500');}
+      if(/PERFORMANCE PACK|PP1|PP2/i.test(allTrim)){featurePremium+=2500;featureNotes.push('Performance Pkg +$2,500');}
+    }
+    // Chevy Camaro / Tahoe / Suburban
+    if(/CAMARO/i.test(cv.model||'')){
+      if(/\bZL1\b/.test(allTrim)){featurePremium+=12000;featureNotes.push('ZL1 +$12,000');}
+      else if(/\bSS\b/.test(allTrim)){featurePremium+=3000;featureNotes.push('SS trim +$3,000');}
+      if(/\b1LE\b/.test(allTrim)){featurePremium+=4000;featureNotes.push('1LE track pkg +$4,000');}
+    }
+    if(/TAHOE|SUBURBAN|SILVERADO/i.test(cv.model||'')){
+      if(/HIGH COUNTRY|DIESEL/i.test(allTrim)){featurePremium+=5000;featureNotes.push('High Country/Diesel +$5,000');}
+      else if(/Z71|RST|LTZ/i.test(allTrim)){featurePremium+=3000;featureNotes.push('Z71/LTZ +$3,000');}
+    }
+    // Dodge Challenger / Charger
+    if(/CHALLENGER|CHARGER/i.test(cv.model||'')){
+      if(/DEMON/i.test(allTrim)){featurePremium+=30000;featureNotes.push('Demon +$30,000 (rare)');}
+      else if(/HELLCAT|REDEYE/i.test(allTrim)){featurePremium+=15000;featureNotes.push('Hellcat/Redeye +$15,000');}
+      else if(/SRT/i.test(allTrim)){featurePremium+=8000;featureNotes.push('SRT +$8,000');}
+      else if(/SCAT\s*PACK/i.test(allTrim)){featurePremium+=4000;featureNotes.push('Scat Pack +$4,000');}
+      else if(/R\/T|\bRT\b/i.test(allTrim)){featurePremium+=3000;featureNotes.push('R/T trim +$3,000');}
+    }
+    // Audi
+    if(/AUDI/i.test(cv.make||'')){
+      if(/\bRS\d/i.test(allTrim)||/\bRS\b/.test(allTrim)){featurePremium+=10000;featureNotes.push('RS performance +$10,000');}
+      else if(/\bS\d\b/i.test(allTrim)){featurePremium+=4500;featureNotes.push('S-line performance +$4,500');}
+      else if(/S[-\s]LINE/i.test(allTrim)){featurePremium+=2000;featureNotes.push('S-line pkg +$2,000');}
+    }
+    // Lexus F-Sport / F
+    if(/LEXUS/i.test(cv.make||'')){
+      if(/\bRC F\b|\bGS F\b|\bLFA\b|\bIS F\b|\bLC 500\b/.test(allTrim+' '+(cv.model||''))){featurePremium+=12000;featureNotes.push('Lexus F performance +$12,000');}
+      else if(/F[-\s]SPORT/i.test(allTrim)){featurePremium+=3000;featureNotes.push('F-Sport pkg +$3,000');}
+    }
+    // Jeep
+    if(/JEEP/i.test(cv.make||'')||/WRANGLER|GRAND CHEROKEE|GLADIATOR/i.test(cv.model||'')){
+      if(/TRACKHAWK/i.test(allTrim)){featurePremium+=15000;featureNotes.push('Trackhawk +$15,000');}
+      else if(/RUBICON/i.test(allTrim)){featurePremium+=6000;featureNotes.push('Rubicon trim +$6,000');}
+      else if(/TRAILHAWK|SRT/i.test(allTrim)){featurePremium+=2000;featureNotes.push('Trailhawk/SRT +$2,000');}
+    }
+    // Toyota off-road / sport
+    if(/TOYOTA/i.test(cv.make||'')){
+      if(/TRD\s*PRO/i.test(allTrim)){featurePremium+=3500;featureNotes.push('TRD Pro +$3,500');}
+      else if(/TRD/i.test(allTrim)){featurePremium+=2000;featureNotes.push('TRD pkg +$2,000');}
+      if(/NIGHTSHADE/i.test(allTrim)){featurePremium+=1500;featureNotes.push('Nightshade edition +$1,500');}
+    }
+    // Tesla performance trims
+    if(/TESLA/i.test(cv.make||'')){
+      if(/PLAID/i.test(allTrim)){featurePremium+=15000;featureNotes.push('Plaid performance +$15,000');}
+      else if(/PERFORMANCE/i.test(allTrim)){featurePremium+=5000;featureNotes.push('Performance trim +$5,000');}
+      else if(/LONG\s*RANGE/i.test(allTrim)){featurePremium+=3000;featureNotes.push('Long Range +$3,000');}
+    }
+    // Subaru WRX / STI
+    if(/SUBARU|WRX|BRZ/i.test(cv.make+' '+cv.model)){
+      if(/\bSTI\b/i.test(allTrim)){featurePremium+=5000;featureNotes.push('STI performance +$5,000');}
+    }
+    // Nissan Z / GT-R
+    if(/GT-R|GTR/i.test(cv.model||'')){
+      if(/NISMO/i.test(allTrim)){featurePremium+=15000;featureNotes.push('Nismo edition +$15,000');}
     }
     let curVal=msrpEst;
     for(let i=0;i<Math.min(age,DEP_Y.length);i++) curVal*=(1-DEP_Y[i]);
@@ -2038,12 +2130,16 @@ async function lookupVIN(){
     const vRows=[['Year',cv.year],['Make',cv.make],['Model',cv.model]];
     if(cv.trim)vRows.push(['Trim',cv.trim]);
     if(cv.body)vRows.push(['Body',cv.body]);
+    if(cv.doors)vRows.push(['Doors',cv.doors]);
+    if(cv.seats)vRows.push(['Seats',cv.seats]);
     const engStr=(cv.engine?cv.engine+' ':'')+( cv.cyl?cv.cyl+'-cyl ':'')+( cv.hp?cv.hp+' HP':'');
     if(engStr.trim())vRows.push(['Engine',engStr.trim()]);
     if(cv.drive)vRows.push(['Drive',cv.drive]);
     if(cv.fuel)vRows.push(['Fuel',cv.fuel]);
     if(cv.trans)vRows.push(['Trans',cv.trans]);
     if(miles)vRows.push(['Mileage',Number(miles).toLocaleString()+' mi']);
+    if(cv.curbWeight)vRows.push(['Curb Weight',Number(cv.curbWeight).toLocaleString()+' lb']);
+    if(cv.wheelbase)vRows.push(['Wheelbase',cv.wheelbase+'"']);
     if(cv.gvwr)vRows.push(['GVWR',cv.gvwr]);
     if(cv.plant)vRows.push(['Plant',cv.plant]);
     vRows.push(['VIN',vin]);
@@ -2242,6 +2338,40 @@ async function lookupVIN(){
     H+='<div class="cd">'+vRows.map(([l,val])=>ROW(l,val)).join('')+'</div></div>';
     H+='<div>'+SH('04','Recall &amp; History Flags');
     H+='<div class="cd">'+rh+ch+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);font-size:10px;color:var(--tx3)">Verify: <a href="https://www.carfax.com/VehicleHistory/ar/byVin.cfx?vin='+vin+'" target="_blank" style="color:var(--acc2)">Carfax</a> &bull; <a href="https://www.nicb.org/vincheck?vin='+vin+'" target="_blank" style="color:var(--acc2)">NICB</a> &bull; <a href="https://www.nhtsa.gov/recalls?nhtsaId='+vin+'" target="_blank" style="color:var(--acc2)">NHTSA</a></div></div></div></div>';
+
+    // ── 02b SAFETY & FEATURES ──
+    // All NHTSA-decoded safety tech + detected option packages.
+    // Compact grid of badges. Only shows items that decoded to something real.
+    const featureBadges=[];
+    const addBadge=(label,value,positive)=>{if(value)featureBadges.push({label,value:String(value),positive:positive!==false});};
+    addBadge('Airbags',cv.airbags?cv.airbags+' locations':null);
+    addBadge('ABS',cv.abs);
+    addBadge('Stability Control',cv.esc);
+    addBadge('Traction Control',cv.tcs);
+    addBadge('Adaptive Cruise',cv.adaptiveCruise);
+    addBadge('Lane Departure',cv.ldw);
+    addBadge('Blind Spot Monitor',cv.bsw);
+    addBadge('Forward Collision Warn',cv.fcw);
+    addBadge('Automatic Brake',cv.aeb);
+    addBadge('Park Assist',cv.parkAssist);
+    if(featureBadges.length||featureNotes.length){
+      H+='<div style="margin-bottom:14px">'+SH('02b','Safety &amp; Features');
+      H+='<div class="cd">';
+      if(featureNotes.length){
+        H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--grn);margin-bottom:7px">\u26A1 PERFORMANCE OPTIONS DETECTED</div>';
+        H+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'
+          +featureNotes.map(n=>'<span style="background:rgba(109,186,125,.1);color:var(--grn);font-size:10px;padding:4px 10px;border-radius:12px;border:1px solid rgba(109,186,125,.3)">'+esc(n)+'</span>').join('')
+          +'</div>';
+      }
+      if(featureBadges.length){
+        H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:7px">SAFETY &amp; DRIVER-ASSIST</div>';
+        H+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px">'
+          +featureBadges.map(b=>'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:7px 10px;font-size:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="color:var(--tx3)">'+esc(b.label)+'</span><span style="color:var(--acc2);font-weight:600;text-align:right">'+esc(b.value)+'</span></div>').join('')
+          +'</div>';
+        H+='<div style="margin-top:8px;font-size:9px;color:var(--tx3)">Per NHTSA VIN decode. Blank items = not reported or not equipped.</div>';
+      }
+      H+='</div></div>';
+    }
 
     // ── 03 VALUATION ──
     H+='<div style="margin-bottom:14px">'+SH('03','Valuation');
