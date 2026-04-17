@@ -1604,9 +1604,14 @@ async function lookupVIN(){
     const tgt=Math.round(adjVal*0.90);
     const mx=Math.round(adjVal*0.97);
     const wk=Math.round(adjVal*1.06);
-    // Confidence: real MSRP + mileage provided + live market comps (0-3 scale)
+    // Confidence: live market comps supersede MSRP (market IS the truth).
+    // HIGH = live market + mileage. GOOD = real MSRP + mileage, no market. MEDIUM = one signal. LOW = neither.
     const hasLiveMarket=!!(marketData && marketData.median_price>0);
-    const dataConfidence=(msrpIsReal?1:0)+(milesProvided?1:0)+(hasLiveMarket?1:0);  // 3=high, 2=good, 1=medium, 0=low
+    let dataConfidence;
+    if(hasLiveMarket && milesProvided) dataConfidence=3;      // HIGH
+    else if(hasLiveMarket || (msrpIsReal && milesProvided)) dataConfidence=2; // GOOD
+    else if(msrpIsReal || milesProvided) dataConfidence=1;    // MEDIUM
+    else dataConfidence=0;                                    // LOW
 
     // ── Recalls + Complaints (parallel) ──
     let recalls=[],complaints=[];
@@ -1744,7 +1749,8 @@ async function lookupVIN(){
     const qBorder=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.3)':qVerdict==='WALK'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
     const qIcon=qVerdict==='WORTH PURSUING'?'✅':qVerdict==='WALK'?'❌':'⚠️';
     const qReasons=[];
-    if(!msrpIsReal)qReasons.push('Valuation uses segment-default baseline (no live MSRP) — run market comps before trusting numbers');
+    if(hasLiveMarket)qReasons.push('✓ Valuation anchored on '+marketData.count+' live dealer comps (median '+fmt$(marketData.median_price)+')');
+    else if(!msrpIsReal)qReasons.push('⚠️ No live MSRP or market comps — numbers are segment-default estimates. Verify before trusting.');
     if(!milesProvided)qReasons.push('⚠️ Mileage not provided — valuation assumes '+expMiles.toLocaleString()+' mi. Enter actual mileage for accurate results.');
     if(askPrice>mx)qReasons.push('Asking price exceeds maximum ('+fmt$(mx)+')');
     else if(askPrice<=tgt)qReasons.push('Asking price is at or below target ('+fmt$(tgt)+')');
@@ -1767,7 +1773,7 @@ async function lookupVIN(){
       +'</div>'
       +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:28px;font-weight:700;color:'+qColor+';line-height:1;margin-bottom:6px">'+qVerdict+'</div>'
       +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">'
-      +'<span>Target: <strong style="color:var(--grn)">'+fmt$(tgt)+'</strong>'+(msrpIsReal?'':' <span style="color:var(--amb)">*</span>')+'</span>'
+      +'<span>Target: <strong style="color:var(--grn)">'+fmt$(tgt)+'</strong>'+(hasLiveMarket||msrpIsReal?'':' <span style="color:var(--amb)">*</span>')+'</span>'
       +'<span>Max: <strong style="color:var(--amb)">'+fmt$(mx)+'</strong></span>'
       +'<span>Est. Profit: <strong style="color:'+(profitMonth>0?'var(--grn)':'var(--red)')+'">'+fmt$(profitMonth)+'/mo</strong></span>'
       +'<span>Risk: <strong style="color:'+qColor+'">'+riskScore+'/10</strong></span>'
@@ -1783,7 +1789,7 @@ async function lookupVIN(){
       +'<div>☐ Lien check clear (VinAudit.com $5 report if unsure)</div>'
       +'<div>☐ Turo Host eligibility confirmed (some makes/models excluded)</div>'
       +'<div>☐ Test drive completed, no warning lights</div>'
-      +(msrpIsReal?'':'<div style="margin-top:6px;color:var(--amb)">* Valuation uses segment default. Run real market comps in MarketCheck integration (coming).</div>')
+      +(hasLiveMarket?'<div style="margin-top:6px;color:var(--grn)">✓ Valuation anchored on live MarketCheck dealer comps — numbers reflect actual local market.</div>':msrpIsReal?'':'<div style="margin-top:6px;color:var(--amb)">⚠️ No live market comps found for this VIN (out-of-area or uncommon model). Numbers are segment-default estimates — verify manually before committing.</div>')
       +'</div>'
       +(canEdit()?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid '+qBorder+'"><button class="btn btn-r" onclick="addFromVIN()">+ Add to Fleet</button></div>':'')
       +'</div>';
