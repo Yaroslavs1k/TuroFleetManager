@@ -1625,26 +1625,28 @@ async function lookupVIN(){
     }catch(e){/* offline or proxy down — fall back to depreciation math */}
 
     // VIN-SPECIFIC LISTING LOOKUP — tries to find the exact dealer listing for this VIN.
-    // If found, auto-populates the Listing URL field so user doesn't need to paste.
-    // Uses MarketCheck's /search/car/active?vins= endpoint via the proxy action=listings.
-    // Only runs if user didn't already paste a URL manually.
+    // STRICT EXACT-VIN MATCH REQUIRED: verified 2026-04-17 that MarketCheck's `vins=`
+    // query parameter is silently ignored — the endpoint returns all year/make/model
+    // comps instead of filtering to the specific VIN. We now only auto-fill when at
+    // least one returned listing's `vin` field matches our query VIN character-for-character.
+    // If no exact match, fall back to web-search buttons.
     if(!safeListingUrl){
       try{
         const lRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?action=listings&vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
         if(lRes.ok){
           const lJson=await lRes.json();
-          const firstListing=(lJson.listings||[])[0];
-          if(firstListing&&firstListing.vdp_url){
-            autoListingUrl=firstListing.vdp_url;
+          const all=lJson.listings||[];
+          const exact=all.find(l=>{const lvin=(l.vin||l.build?.vin||'').toUpperCase();return lvin===vin.toUpperCase();});
+          if(exact&&exact.vdp_url){
+            autoListingUrl=exact.vdp_url;
             autoListingMeta={
-              dealer:firstListing.dealer?.name||'',
-              city:firstListing.dealer?.city||'',
-              state:firstListing.dealer?.state||'',
-              price:firstListing.price||null,
-              miles:firstListing.miles||null,
-              totalMatches:lJson.listings?.length||lJson.num_found||1
+              dealer:exact.dealer?.name||'',
+              city:exact.dealer?.city||'',
+              state:exact.dealer?.state||'',
+              price:exact.price||null,
+              miles:exact.miles||null,
+              source:'MarketCheck (exact VIN match)'
             };
-            // Reflect in the input so user sees it was auto-filled
             const luEl=document.getElementById('lu-url');if(luEl&&!luEl.value)luEl.value=autoListingUrl;
           }
         }

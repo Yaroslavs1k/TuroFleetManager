@@ -81,7 +81,28 @@ serve(async (req) => {
       // Full vehicle specs including trim, MSRP, features
       endpoint = `https://mc-api.marketcheck.com/v2/decode/car/${vin}/specs?api_key=${MARKETCHECK_KEY}`;
     } else if (action === "listings") {
-      // Active dealer listings of this exact VIN
+      // Active dealer listings for this exact VIN.
+      // Verified 2026-04-17: MarketCheck's ?vins= filter is buggy and silently returns
+      // year/make/model comps instead of filtering to the VIN. Strategy:
+      //   1) Try /v2/listing/car/{VIN} — direct VIN endpoint (returns the specific car if indexed).
+      //   2) Fall back to /search/car/active?vins=VIN and let the client filter by exact VIN match.
+      const directRes = await fetch(
+        `https://mc-api.marketcheck.com/v2/listing/car/${vin}?api_key=${MARKETCHECK_KEY}`
+      );
+      if (directRes.ok) {
+        const direct = await directRes.json();
+        // Normalize to the `{ listings: [...] }` shape the client expects
+        const normalized = direct && direct.vin
+          ? { listings: [direct], num_found: 1, source: "direct" }
+          : { listings: [], num_found: 0, source: "direct-empty" };
+        if (normalized.listings.length) {
+          return new Response(
+            JSON.stringify(normalized),
+            { headers: { ...corsHeaders(origin), "Content-Type": "application/json" } }
+          );
+        }
+      }
+      // Fallback: search endpoint (client will filter by exact VIN match)
       endpoint = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&vins=${vin}`;
     } else {
       // Default: market comps for same year/make/model in ZIP radius
