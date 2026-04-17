@@ -138,29 +138,41 @@ serve(async (req) => {
         }
       }
 
-      const buildEndpoint = (mdl: string) =>
-        `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(mdl)}&zip=${zip}&radius=${radius}&rows=50`;
+      // Build a search URL. Location filters are optional — omit for nationwide.
+      const buildEndpoint = (mdl: string, opts: { zip?: string; radius?: string } = {}) => {
+        let u = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(mdl)}&rows=50`;
+        if (opts.zip) u += `&zip=${opts.zip}`;
+        if (opts.radius) u += `&radius=${opts.radius}`;
+        return u;
+      };
 
-      endpoint = buildEndpoint(modelRaw);
-      let compsRes = await fetch(endpoint);
-      let comps = await compsRes.json();
+      // Cascade of attempts — stop at the first that returns listings.
+      // Critical for rare cars in sparse markets (e.g. BMW M4 Convertible in Vegas):
+      // the RAW model name "M4 Convertible" matches MarketCheck's index; stripping to "M4"
+      // actually returns zero because their listings store the full body-qualified name.
+      const attempts = [
+        { label: "local-raw",        url: buildEndpoint(modelRaw,   { zip, radius }) },
+        { label: "local-clean",      url: buildEndpoint(modelClean, { zip, radius }) },
+        { label: "wide-500-raw",     url: buildEndpoint(modelRaw,   { zip, radius: "500" }) },
+        { label: "wide-500-clean",   url: buildEndpoint(modelClean, { zip, radius: "500" }) },
+        { label: "nationwide-raw",   url: buildEndpoint(modelRaw) },
+        { label: "nationwide-clean", url: buildEndpoint(modelClean) },
+      ];
+
+      let comps: any = { listings: [] };
       let modelUsed = modelRaw;
-
-      // Retry with cleaned model if no results and we actually stripped something
-      if ((!comps.listings || comps.listings.length === 0) && modelClean !== modelRaw) {
-        endpoint = buildEndpoint(modelClean);
-        compsRes = await fetch(endpoint);
-        comps = await compsRes.json();
-        modelUsed = modelClean;
-      }
-
-      // Retry nationwide if still empty (rare cars — no local inventory)
-      if (!comps.listings || comps.listings.length === 0) {
-        const natEndpoint = `https://mc-api.marketcheck.com/v2/search/car/active?api_key=${MARKETCHECK_KEY}&year=${year}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(modelClean)}&rows=50`;
-        compsRes = await fetch(natEndpoint);
-        comps = await compsRes.json();
-        if (comps.listings && comps.listings.length > 0) {
-          modelUsed = modelClean + " (nationwide)";
+      let attemptUsed = "none";
+      for (const a of attempts) {
+        const resp = await fetch(a.url);
+        if (!resp.ok) continue;
+        const j = await resp.json();
+        if (j.listings && j.listings.length > 0) {
+          comps = j;
+          attemptUsed = a.label;
+          modelUsed = a.label.includes("clean") ? modelClean : modelRaw;
+          if (a.label.startsWith("nationwide")) modelUsed += " (nationwide)";
+          else if (a.label.startsWith("wide")) modelUsed += " (500mi)";
+          break;
         }
       }
 
@@ -196,6 +208,7 @@ serve(async (req) => {
           modelUsed,
           modelRaw,
           modelClean,
+          attemptUsed,
         },
       };
 
