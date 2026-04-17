@@ -1898,32 +1898,40 @@ async function lookupVIN(){
       for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
       return Math.round(v);
     });
-    // Mileage-based value modifier — even without live market data, we can differentiate
-    // "this car" from "typical" using the actual miles vs expected miles for age.
-    // Used ONLY when hasLiveMarket is false (otherwise the market median already reflects this).
+    // Mileage-based value modifier — "this car" differentiates from "typical" via actual-vs-expected miles.
+    // `milesBasedPremium` is used when no live market data.
+    // `thisCarChartPremium` is a LARGER premium used for chart visualization only (uncapped at current age,
+    // up to ±15%) so the two curves are visibly distinct when miles deviate from market average.
+    // The pricing `adjVal` still uses the conservative 7% cap to avoid overstating the car's value.
     const expMilesCurrent=Math.max(age,1)*13000;
     const milesDelta=actMiles>0?(expMilesCurrent-actMiles)/expMilesCurrent:0;
     const milesBasedPremium=milesDelta>0.5?0.10:milesDelta>0.3?0.07:milesDelta>0.15?0.04:milesDelta<-0.3?-0.08:milesDelta<-0.15?-0.04:0;
+    // Chart-only "this car" premium — uses marketData.avg_miles when available (more accurate reference)
+    let thisCarChartPremium=0;
+    if(hasLiveMarket&&marketData.avg_miles>0&&actMiles>0){
+      const mktDelta=(marketData.avg_miles-actMiles)/marketData.avg_miles;
+      // Uncapped-ish for chart visualization: ±15% range
+      thisCarChartPremium=Math.max(-0.15,Math.min(0.15,mktDelta*0.25));
+    } else {
+      thisCarChartPremium=milesBasedPremium;
+    }
+    // "This car" chart value at current age = market median × thisCarChartPremium
+    // If no market: apply premium to typical curve at current age
+    const thisCarValAtAge=hasLiveMarket
+      ? Math.round(marketData.median_price*(1+thisCarChartPremium))
+      : Math.round(typicalVals[Math.min(age,typicalVals.length-1)]*(1+thisCarChartPremium));
     const thisCarVals=chartYrs.map(y=>{
       if(y===0)return anchorMsrp;
-      // With live market: interpolate years 0 to current-age from MSRP -> live adjVal
-      if(hasLiveMarket&&age>0&&y<=age){
+      // Interpolate years 0 to current-age from MSRP -> thisCarValAtAge
+      if(age>0&&y<=age){
         const t=y/age;
-        return Math.round(anchorMsrp*(1-t)+adjVal*t);
+        return Math.round(anchorMsrp*(1-t)+thisCarValAtAge*t);
       }
-      // Without live market: apply a mileage-based premium/discount on top of typical curve
-      if(!hasLiveMarket){
-        let v=anchorMsrp;
-        for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
-        // Premium peaks at current age (most recent miles data), fades for future years
-        const ageWeight=y<=age?1:Math.max(0,1-(y-age)/5);
-        const premium=milesBasedPremium*ageWeight;
-        return Math.round(v*(1+premium));
-      }
-      // Post-current-age (with live market): apply depreciation forward from adjVal
-      let v2=adjVal;
-      for(let i=age;i<y&&(i-age)<DEP_Y.length;i++)v2*=(1-DEP_Y[i-age]);
-      return Math.round(v2);
+      // Years past current — depreciate forward from thisCarValAtAge
+      let v=thisCarValAtAge;
+      const startYr=Math.max(age,0);
+      for(let i=startYr;i<y&&(i-startYr)<DEP_Y.length;i++)v*=(1-DEP_Y[i-startYr]);
+      return Math.round(v);
     });
     const chartVals=thisCarVals;
     const swS=isSport?2:isLux?2:3,swE=isSport?5:isLux?5:6;
@@ -1954,6 +1962,17 @@ async function lookupVIN(){
     }
     // Walk away = never above asking (if asking is below fair market)
     const walkFinal=askPrice>0?Math.min(wk,askPrice):wk;
+    // Maximum pay = never above walk-away. Previously uncapped which caused
+    // "Maximum $59,108 > Walk Away $55,000" (impossible ordering) when asking
+    // price capped walkFinal but mx was allowed to exceed it.
+    const maxFinal=Math.min(mx,walkFinal);
+    // Tighten rangeHigh to never exceed maxFinal. Guarantees ladder invariant.
+    if(rangeHigh>maxFinal)rangeHigh=maxFinal;
+    if(rangeLow>rangeHigh)rangeLow=rangeHigh;
+    // Runtime invariant check (logs warning if ladder inverts). Catches regressions.
+    if(!(openingOffer<=rangeLow&&rangeLow<=rangeHigh&&rangeHigh<=maxFinal&&maxFinal<=walkFinal)){
+      console.warn('[VIN] pricing ladder invariant violated',{openingOffer,rangeLow,rangeHigh,maxFinal,walkFinal,askPrice,vin});
+    }
 
     // ── Talking Points ──
     const talkPts=[];
@@ -2041,7 +2060,7 @@ async function lookupVIN(){
     if(belowMarketByMuch)qReasons.push('✓ Asking is '+marketDiscPct.toFixed(1)+'% below market median ('+fmt$(marketMedian-askPrice)+' discount)');
     else if(marketDiscPct!==null&&marketDiscPct>0)qReasons.push('Asking is '+marketDiscPct.toFixed(1)+'% below market median');
     else if(marketDiscPct!==null&&marketDiscPct<0)qReasons.push('⚠️ Asking is '+Math.abs(marketDiscPct).toFixed(1)+'% above market median');
-    if(askPrice>mx)qReasons.push('Asking price exceeds maximum ('+fmt$(mx)+')');
+    if(askPrice>maxFinal)qReasons.push('Asking price exceeds maximum ('+fmt$(maxFinal)+')');
     else if(askPrice<=tgt)qReasons.push('Asking price is at or below target ('+fmt$(tgt)+')');
     else qReasons.push('Asking price is between target and maximum');
     if(riskScore>=7)qReasons.push('High damage risk score ('+riskScore+'/10)');
@@ -2108,14 +2127,14 @@ async function lookupVIN(){
 
     // ── LIVE ASKING-PRICE SLIDER (Phase 5.5) ──
     // Expose computed context so the slider can recompute verdict client-side
-    window._vinCtx={tgt:tgt,mx:mx,wk:walkFinal,rangeLow:rangeLow,rangeHigh:rangeHigh,riskScore:riskScore,profitMonth:profitMonth,baseAsk:askPrice||tgt,marketMedian:marketMedian};
+    window._vinCtx={tgt:tgt,mx:maxFinal,wk:walkFinal,rangeLow:rangeLow,rangeHigh:rangeHigh,riskScore:riskScore,profitMonth:profitMonth,baseAsk:askPrice||tgt,marketMedian:marketMedian};
     // ── WATCHLIST SNAPSHOT ──
     // Full data captured for save-to-watchlist. Persisted verbatim when user clicks Save,
     // so the negotiation card + PDF export can reconstruct the analysis without re-querying APIs.
     window._vinSnap={
       vin:vin,year:cv.year,make:cv.make,model:cv.model,trim:cv.trim||'',bodyStyle:cv.bodyClass||'',
-      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,openingOffer:openingOffer,offerSavings:offerSavings,rangeLow:rangeLow,rangeHigh:rangeHigh,walkFinal:walkFinal,totalPenalty:totalPenalty,recallPenalty:recallPenalty,riskPenalty:riskPenalty,listingUrl:safeListingUrl||autoListingUrl||'',listingAutoFound:!safeListingUrl&&!!autoListingUrl,listingDealer:autoListingMeta,
-      verdict:qVerdict,tgt:tgt,mx:mx,wk:wk,profitMonth:profitMonth,riskScore:riskScore,riskLabel:riskLabel,
+      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,openingOffer:openingOffer,offerSavings:offerSavings,rangeLow:rangeLow,rangeHigh:rangeHigh,walkFinal:walkFinal,maxFinal:maxFinal,totalPenalty:totalPenalty,recallPenalty:recallPenalty,riskPenalty:riskPenalty,listingUrl:safeListingUrl||autoListingUrl||'',listingAutoFound:!safeListingUrl&&!!autoListingUrl,listingDealer:autoListingMeta,
+      verdict:qVerdict,tgt:tgt,mx:maxFinal,wk:walkFinal,profitMonth:profitMonth,riskScore:riskScore,riskLabel:riskLabel,
       breakEvenMonths:monthsBE,segLabel:segLabel,
       marketMedian:marketMedian,marketCompCount:(hasLiveMarket&&marketData)?marketData.count:0,
       marketDiscountPct:marketDiscPct,belowMarketByMuch:belowMarketByMuch,
@@ -2331,7 +2350,7 @@ async function lookupVIN(){
 
     // ── 12 BEST PRICE TO BUY ──
     H+='<div style="margin-bottom:14px">'+SH('12','Best Price to Buy');
-    H+='<div class="cd"><div class="ph-ts" style="justify-content:flex-start;gap:24px;margin-bottom:14px"><div class="ph-ti"><div class="tl">Target Price</div><div class="tv" style="color:var(--grn)">'+fmt$(tgt)+'</div><div style="font-size:9px;color:var(--tx3)">Push hard for this</div></div><div class="ph-ti"><div class="tl">Maximum Pay</div><div class="tv mx">'+fmt$(mx)+'</div><div style="font-size:9px;color:var(--tx3)">Acceptable deal</div></div><div class="ph-ti"><div class="tl">Walk Away If ></div><div class="tv wk">'+fmt$(wk)+'</div><div style="font-size:9px;color:var(--tx3)">Skip it above this</div></div>'+(pp?'<div class="ph-ti"><div class="tl">Asking Price</div><div class="tv" style="color:'+(askPrice<=mx?'var(--tx2)':'var(--red)')+'">'+fmt$(askPrice)+'</div><div style="font-size:9px;color:'+(askPrice<=tgt?'var(--grn)':askPrice<=mx?'var(--tx3)':'var(--red)')+'">'+( askPrice<=tgt?'Deal':askPrice<=mx?'Negotiate down':'Too high')+'</div></div>':'')+'</div>';
+    H+='<div class="cd"><div class="ph-ts" style="justify-content:flex-start;gap:24px;margin-bottom:14px"><div class="ph-ti"><div class="tl">Target Price</div><div class="tv" style="color:var(--grn)">'+fmt$(tgt)+'</div><div style="font-size:9px;color:var(--tx3)">Push hard for this</div></div><div class="ph-ti"><div class="tl">Maximum Pay</div><div class="tv mx">'+fmt$(maxFinal)+'</div><div style="font-size:9px;color:var(--tx3)">Acceptable deal</div></div><div class="ph-ti"><div class="tl">Walk Away If ></div><div class="tv wk">'+fmt$(walkFinal)+'</div><div style="font-size:9px;color:var(--tx3)">Skip it above this</div></div>'+(pp?'<div class="ph-ti"><div class="tl">Asking Price</div><div class="tv" style="color:'+(askPrice<=maxFinal?'var(--tx2)':'var(--red)')+'">'+fmt$(askPrice)+'</div><div style="font-size:9px;color:'+(askPrice<=tgt?'var(--grn)':askPrice<=maxFinal?'var(--tx3)':'var(--red)')+'">'+( askPrice<=tgt?'Deal':askPrice<=maxFinal?'Negotiate down':'Too high')+'</div></div>':'')+'</div>';
     H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:8px">NEGOTIATING TIPS FOR '+cv.make+' '+cv.model+'</div>';
     const tips=[];
     if(recalls.length)tips.push('Use '+recalls.length+' open recall'+(recalls.length>1?'s':'')+' as negotiating leverage — deduct $'+Math.round(recalls.length*600)+' for repair/inconvenience');
@@ -4522,6 +4541,10 @@ function _buildNegotiationTips(s){
   return tips;
 }
 
+// Bump this whenever pricing/exit-strategy/feature logic changes in a way that
+// affects saved-card display. Saved entries below this version show a "stale" pill.
+const SNAPSHOT_VERSION=3;
+
 function saveVINToWatchlist(){
   const s=window._vinSnap;
   if(!s||!s.vin){toast('Decode a VIN first');return;}
@@ -4534,6 +4557,7 @@ function saveVINToWatchlist(){
     updatedAt:new Date().toISOString(),
     notes:existingIdx>=0?list[existingIdx].notes:'',
     status:existingIdx>=0?list[existingIdx].status:'considering',
+    snapshotVersion:SNAPSHOT_VERSION,
     snapshot:s
   };
   if(existingIdx>=0){list[existingIdx]=entry;toast('Watchlist entry updated');}
@@ -4631,9 +4655,13 @@ function renderWatchPage(){
       const verdictColor=s.verdict==='WORTH PURSUING'?'var(--grn)':s.verdict==='WALK'?'var(--red)':'var(--amb)';
       const verdictBg=s.verdict==='WORTH PURSUING'?'rgba(109,186,125,.12)':s.verdict==='WALK'?'rgba(196,122,106,.12)':'rgba(224,159,62,.12)';
       const statusDot=w.status==='bought'?'<span style="background:var(--grn);color:#0a0a0a;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">BOUGHT</span>':w.status==='passed'?'<span style="background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">PASSED</span>':'';
-      H+='<div class="cd" style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px">'
+      // Stale-snapshot indicator — tells user the saved numbers predate the current pricing logic.
+      // Click-to-refresh re-runs lookupVIN() and re-saves with current logic.
+      const isStale=!w.snapshotVersion||w.snapshotVersion<SNAPSHOT_VERSION;
+      const stalePill=isStale?'<button onclick="refreshWatchlistEntry(\''+w.id+'\')" style="background:rgba(224,159,62,.12);color:var(--amb);font-size:9px;font-weight:700;padding:3px 8px;border-radius:10px;border:1px solid rgba(224,159,62,.3);cursor:pointer;margin-left:6px;font-family:\'Plus Jakarta Sans\',sans-serif" title="Saved with older analysis logic \u2014 click to re-decode with latest">\u27f3 Refresh</button>':'';
+      H+='<div class="cd" style="background:var(--sf);border:1px solid '+(isStale?'rgba(224,159,62,.35)':'var(--bd)')+';border-radius:10px;padding:12px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-        +'<div style="flex:1;min-width:200px"><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--tx);cursor:pointer" onclick="openSavedCarInVIN(\''+w.id+'\')">'+esc(s.vName||'Vehicle')+statusDot+'</div>'
+        +'<div style="flex:1;min-width:200px"><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--tx);cursor:pointer" onclick="openSavedCarInVIN(\''+w.id+'\')">'+esc(s.vName||'Vehicle')+statusDot+stalePill+'</div>'
         +'<div style="font-size:10px;color:var(--tx3);margin-top:2px">VIN '+esc(s.vin||'')+' &middot; '+(s.miles||0).toLocaleString()+' mi</div>'
         +'<div style="font-size:9px;color:var(--tx3);margin-top:1px">Saved '+(w.savedAt||'').slice(0,10)+(w.updatedAt&&w.updatedAt!==w.savedAt?' &middot; Updated '+w.updatedAt.slice(0,10):'')+'</div></div>'
         +'<span style="background:'+verdictBg+';color:'+verdictColor+';font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;letter-spacing:1px;white-space:nowrap">'+esc(s.verdict||'?')+'</span>'
@@ -4680,6 +4708,30 @@ function openSavedCarInVIN(id){
     set('lu-url',s.listingUrl||'');
     if(typeof lookupVIN==='function')lookupVIN();
   },150);
+}
+
+// Re-decode a stale watchlist entry in-place and save the fresh snapshot (bumps snapshotVersion).
+// Happens silently in the background — no navigation — so the card list refreshes to the latest.
+async function refreshWatchlistEntry(id){
+  const w=(D.savedCars()||[]).find(x=>x.id===id);if(!w||!w.snapshot)return;
+  const s=w.snapshot;
+  toast('Refreshing '+(s.vName||'car')+'\u2026');
+  // Populate input fields silently, then re-run lookupVIN
+  const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
+  // Make sure the VIN tab/inputs exist. If not, force a silent re-render but stay on watch tab.
+  if(!document.getElementById('vin-i')){
+    if(typeof renderVin==='function')renderVin();
+  }
+  set('vin-i',s.vin);set('mi-i',s.miles);set('pp-i',s.askPrice);set('zi-i',s.zip||'89014');
+  set('lu-url',s.listingUrl||'');
+  if(typeof lookupVIN!=='function'){toast('Refresh unavailable');return;}
+  try{
+    await lookupVIN();
+    // lookupVIN finished → window._vinSnap is fresh. Persist by calling save.
+    if(window._vinSnap&&window._vinSnap.vin===s.vin){saveVINToWatchlist();toast('Refreshed');}
+  }catch(e){toast('Refresh failed: '+(e.message||'error'));}
+  // Return user to the Watchlist tab and re-render
+  if(typeof sw==='function')sw('watch',null);
 }
 
 // Export the CURRENTLY displayed VIN analysis (not a saved one) as PDF / HTML / share link.
