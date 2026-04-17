@@ -1415,7 +1415,7 @@ function renderDash(){
     // Compute monthly profit per vehicle for sorting
     const mnow=new Date(),mStr=mnow.getFullYear()+'-'+(mnow.getMonth()+1).toString().padStart(2,'0');
     const scored=f.map((v,i)=>{
-      const mRev=b.filter(x=>Number(x.ci)===i&&(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
+      const mRev=b.filter(x=>Number(x.ci)===i&&(x.start||x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
       const mExp=e.filter(x=>Number(x.ci)===i&&(x.date||'').startsWith(mStr)).reduce((s,x)=>s+Number(x.amount||0),0);
       const trips=b.filter(x=>Number(x.ci)===i).length;
       return{v,i,mProfit:mRev-mExp,mRev,trips};
@@ -1532,9 +1532,16 @@ async function lookupVIN(){
   try{
     const dr=await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/'+vin+'?format=json');
     const dd=await dr.json();
-    if(!dd.Results||!dd.Results.length||dd.Results[0].ErrorCode==='1'){throw new Error('VIN not recognized. Please check and try again.');}
+    if(!dd.Results||!dd.Results.length){throw new Error('VIN not recognized. Please check and try again.');}
     const v=dd.Results[0];
-    cv={vin,miles,zip,pp,year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,trans:v.TransmissionStyle};
+    // NHTSA ErrorCode 1 = check-digit mismatch (common for imports/older VINs). Decoded data often still valid.
+    // Only reject if we can't extract make AND model — that means the decode truly failed.
+    if(!(v.Make||'').trim() && !(v.Model||'').trim()){
+      throw new Error('VIN not recognized by NHTSA. Please verify the VIN and try again.');
+    }
+    // Parse real MSRP from NHTSA BasePrice when available (avoids segment-default guessing)
+    const nhtsaBasePrice=parseFloat(v.BasePrice)||0;
+    cv={vin,miles,zip,pp,year:v.ModelYear,make:v.Make||'',model:v.Model||'',trim:v.Trim||'',body:v.BodyClass,doors:v.Doors,drive:v.DriveType,engine:v.DisplacementL?v.DisplacementL+'L':'',cyl:v.EngineCylinders,hp:parseInt(v.EngineHP)||0,fuel:v.FuelTypePrimary,plant:[v.PlantCity,v.PlantCountry].filter(Boolean).join(', '),gvwr:v.GVWR,trans:v.TransmissionStyle,basePrice:nhtsaBasePrice};
 
     // ── Classification ──
     const mkUP=cv.make.toUpperCase();
@@ -1550,13 +1557,17 @@ async function lookupVIN(){
     // ── Valuation ──
     const yr=parseInt(cv.year||'2020');
     const age=Math.max(0,2026-yr);
-    const msrpEst=isSport?72000:isLux?58000:isTruck?48000:26000;
+    // Prefer NHTSA BasePrice (real MSRP for this vehicle), else fall back to segment default with a warning flag.
+    const SEG_DEFAULT_MSRP=isSport?72000:isLux?58000:isTruck?48000:26000;
+    const msrpEst=cv.basePrice>0?cv.basePrice:SEG_DEFAULT_MSRP;
+    const msrpIsReal=cv.basePrice>0;
     const DEP_Y=isSport?[.15,.09,.09,.08,.08,.07,.07,.06,.06,.06]:isLux?[.22,.13,.13,.12,.12,.10,.09,.08,.08,.07]:isTruck?[.15,.11,.11,.10,.10,.09,.08,.07,.07,.06]:[.18,.12,.12,.11,.11,.09,.08,.08,.07,.07];
     let curVal=msrpEst;
     for(let i=0;i<Math.min(age,DEP_Y.length);i++) curVal*=(1-DEP_Y[i]);
     curVal=Math.round(curVal);
     const expMiles=age*13000;
-    const actMiles=parseInt(miles)||expMiles;
+    const milesProvided=(miles||'').toString().trim().length>0 && parseInt(miles)>0;
+    const actMiles=milesProvided?parseInt(miles):expMiles;
     const miDiff=expMiles>0?(expMiles-actMiles)/expMiles:0;
     const miAdj=miDiff>0.5?0.20:miDiff>0.25?0.12:miDiff>0.10?0.07:miDiff<-0.50?-0.20:miDiff<-0.25?-0.12:miDiff<-0.10?-0.07:0;
     const adjVal=Math.round(curVal*(1+miAdj));
@@ -1565,6 +1576,8 @@ async function lookupVIN(){
     const tgt=Math.round(adjVal*0.90);
     const mx=Math.round(adjVal*0.97);
     const wk=Math.round(adjVal*1.06);
+    // Confidence flag — used later to downgrade verdict language when data quality is low
+    const dataConfidence=(msrpIsReal?1:0)+(milesProvided?1:0);  // 2=high, 1=medium, 0=low
 
     // ── Recalls + Complaints (parallel) ──
     let recalls=[],complaints=[];
@@ -1691,13 +1704,19 @@ async function lookupVIN(){
 
     let H='';
 
-    // ── QUICK BUY DECISION ──
-    const qVerdict=askPrice<=tgt&&riskScore<7&&profitMonth>0?'BUY':askPrice>wk||( riskScore>=8&&profitMonth<=0)?'PASS':'CAUTION';
-    const qColor=qVerdict==='BUY'?'var(--grn)':qVerdict==='PASS'?'var(--red)':'var(--amb)';
-    const qBg=qVerdict==='BUY'?'rgba(109,186,125,.08)':qVerdict==='PASS'?'rgba(196,122,106,.08)':'rgba(224,159,62,.08)';
-    const qBorder=qVerdict==='BUY'?'rgba(109,186,125,.3)':qVerdict==='PASS'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
-    const qIcon=qVerdict==='BUY'?'✅':qVerdict==='PASS'?'❌':'⚠️';
+    // ── PRELIMINARY ASSESSMENT (heuristic — verify with real comps before buying) ──
+    // Verdict vocabulary reflects that this is a first-pass signal, not a zero-mistakes recommendation.
+    // "Worth Pursuing" = numbers look favorable, run real comps next.
+    // "Dig Deeper"     = mixed signals, more data needed before committing.
+    // "Walk"           = strong negative signals even on heuristic math.
+    const qVerdict=askPrice<=tgt&&riskScore<7&&profitMonth>0?'WORTH PURSUING':askPrice>wk||( riskScore>=8&&profitMonth<=0)?'WALK':'DIG DEEPER';
+    const qColor=qVerdict==='WORTH PURSUING'?'var(--grn)':qVerdict==='WALK'?'var(--red)':'var(--amb)';
+    const qBg=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.08)':qVerdict==='WALK'?'rgba(196,122,106,.08)':'rgba(224,159,62,.08)';
+    const qBorder=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.3)':qVerdict==='WALK'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
+    const qIcon=qVerdict==='WORTH PURSUING'?'✅':qVerdict==='WALK'?'❌':'⚠️';
     const qReasons=[];
+    if(!msrpIsReal)qReasons.push('Valuation uses segment-default baseline (no live MSRP) — run market comps before trusting numbers');
+    if(!milesProvided)qReasons.push('⚠️ Mileage not provided — valuation assumes '+expMiles.toLocaleString()+' mi. Enter actual mileage for accurate results.');
     if(askPrice>mx)qReasons.push('Asking price exceeds maximum ('+fmt$(mx)+')');
     else if(askPrice<=tgt)qReasons.push('Asking price is at or below target ('+fmt$(tgt)+')');
     else qReasons.push('Asking price is between target and maximum');
@@ -1706,20 +1725,36 @@ async function lookupVIN(){
     if(profitMonth>0)qReasons.push('Est. monthly profit: '+fmt$(profitMonth));
     else qReasons.push('Estimated monthly loss: '+fmt$(profitMonth));
     if(monthsBE<999)qReasons.push('Break-even in ~'+monthsBE+' months');
+    // Pre-flight checklist — must be completed before verdict can be trusted for a real purchase
+    const confLabel=dataConfidence===2?'HIGH':dataConfidence===1?'MEDIUM':'LOW';
+    const confColor=dataConfidence===2?'var(--grn)':dataConfidence===1?'var(--amb)':'var(--red)';
     H+='<div style="margin-bottom:20px;background:'+qBg+';border:2px solid '+qBorder+';border-radius:10px;padding:16px">'
       +'<div style="display:flex;align-items:center;gap:14px">'
       +'<div style="font-size:42px;flex-shrink:0;line-height:1">'+qIcon+'</div>'
       +'<div style="flex:1">'
-      +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tx3);text-transform:uppercase;margin-bottom:2px">Quick Buy Decision</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">'
+      +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tx3);text-transform:uppercase">Preliminary Assessment</div>'
+      +'<div style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:'+confColor+';color:#0a0a0a;letter-spacing:1px">DATA: '+confLabel+'</div>'
+      +'</div>'
       +'<div style="font-family:\'Rajdhani\',sans-serif;font-size:28px;font-weight:700;color:'+qColor+';line-height:1;margin-bottom:6px">'+qVerdict+'</div>'
       +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">'
-      +'<span>Target: <strong style="color:var(--grn)">'+fmt$(tgt)+'</strong></span>'
+      +'<span>Target: <strong style="color:var(--grn)">'+fmt$(tgt)+'</strong>'+(msrpIsReal?'':' <span style="color:var(--amb)">*</span>')+'</span>'
       +'<span>Max: <strong style="color:var(--amb)">'+fmt$(mx)+'</strong></span>'
       +'<span>Est. Profit: <strong style="color:'+(profitMonth>0?'var(--grn)':'var(--red)')+'">'+fmt$(profitMonth)+'/mo</strong></span>'
       +'<span>Risk: <strong style="color:'+qColor+'">'+riskScore+'/10</strong></span>'
       +'</div>'
-      +'<div style="font-size:11px;color:var(--tx2)">'+qReasons.map(r=>'<span style="margin-right:10px">• '+r+'</span>').join('')+'</div>'
+      +'<div style="font-size:11px;color:var(--tx2);line-height:1.7">'+qReasons.map(r=>'<div>• '+r+'</div>').join('')+'</div>'
       +'</div>'
+      +'</div>'
+      +'<div style="margin-top:12px;padding:10px;background:rgba(0,0,0,.15);border-radius:6px;font-size:10px;color:var(--tx3);line-height:1.6">'
+      +'<div style="font-weight:700;color:var(--tx2);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase;font-size:9px">Pre-Purchase Checklist — verify BEFORE committing</div>'
+      +'<div>☐ NICB VINCheck (free, theft/salvage): <a href="https://www.nicb.org/vincheck" target="_blank" style="color:var(--acc2)">nicb.org/vincheck</a></div>'
+      +'<div>☐ VIN-specific recall status: <a href="https://www.nhtsa.gov/recalls?vin='+vin+'" target="_blank" style="color:var(--acc2)">nhtsa.gov recalls</a></div>'
+      +'<div>☐ Carfax / AutoCheck reviewed (accident history, owners, title brand)</div>'
+      +'<div>☐ Lien check clear (VinAudit.com $5 report if unsure)</div>'
+      +'<div>☐ Turo Host eligibility confirmed (some makes/models excluded)</div>'
+      +'<div>☐ Test drive completed, no warning lights</div>'
+      +(msrpIsReal?'':'<div style="margin-top:6px;color:var(--amb)">* Valuation uses segment default. Run real market comps in MarketCheck integration (coming).</div>')
       +'</div>'
       +(canEdit()?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid '+qBorder+'"><button class="btn btn-r" onclick="addFromVIN()">+ Add to Fleet</button></div>':'')
       +'</div>';
