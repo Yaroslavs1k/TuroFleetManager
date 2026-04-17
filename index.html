@@ -68,6 +68,10 @@ body.sa-mode{padding-top:33px}
 .tdd-item:last-child{border-bottom:none}
 .tdd-item:hover,.tdd-item.active{background:var(--rg2)}
 .notif-btn{position:relative;background:none;border:none;color:var(--tx2);cursor:pointer;padding:5px;border-radius:7px;transition:all .2s}
+.sync-pill{font-size:10px;font-family:'Plus Jakarta Sans',sans-serif;padding:3px 8px;border-radius:12px;background:rgba(52,184,125,.12);color:#34b87d;border:1px solid rgba(52,184,125,.25);white-space:nowrap;user-select:none;transition:all .25s}
+.sync-pill.syncing{background:rgba(242,177,67,.12);color:#f2b143;border-color:rgba(242,177,67,.3)}
+.sync-pill.offline{background:rgba(235,86,86,.12);color:#eb5656;border-color:rgba(235,86,86,.3)}
+@media(max-width:720px){.sync-pill{display:none}}
 .notif-btn:hover{color:var(--acc2);background:var(--rg2)}
 .ndot{position:absolute;top:2px;right:2px;width:7px;height:7px;background:var(--red);border-radius:50%;border:2px solid var(--bg);display:none}
 .ndot.show{display:block}
@@ -371,6 +375,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       </div>
       <div class="tdd" id="tdd"><div id="tdd-list"></div><div style="padding:9px 13px;border-top:1px solid var(--bd)"><button onclick="showNewTeam();closeTDD()" style="background:none;border:none;color:var(--acc2);font-size:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase">+ Create New Team</button></div></div>
     </div>
+    <div id="sync-pill" class="sync-pill" title="Sync status">&bull; Synced</div>
     <button class="notif-btn" onclick="toggleNP()" id="notif-btn">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
       <span class="ndot" id="ndot"></span>
@@ -451,15 +456,65 @@ async function h256(s){const b=await crypto.subtle.digest('SHA-256',new TextEnco
 const CACHE = {};
 let SYNC_READY = false;
 
+// ── SYNC STATUS INDICATOR ──
+let SYNC_PENDING = 0;
+let SYNC_LAST_OK = Date.now();
+function setSyncStatus(state, msg) {
+  const p = document.getElementById('sync-pill');
+  if (!p) return;
+  p.classList.remove('syncing', 'offline');
+  if (state === 'offline') {
+    p.classList.add('offline');
+    p.innerHTML = '&#9888; Offline' + (SYNC_PENDING ? ' (' + SYNC_PENDING + ' pending)' : '');
+  } else if (state === 'syncing') {
+    p.classList.add('syncing');
+    p.innerHTML = '&#8635; Syncing' + (SYNC_PENDING > 1 ? ' (' + SYNC_PENDING + ')' : '');
+  } else {
+    p.innerHTML = '&bull; Synced';
+  }
+  if (msg) p.title = msg;
+}
+async function trackSync(promise) {
+  SYNC_PENDING++;
+  setSyncStatus('syncing');
+  try {
+    const r = await promise;
+    SYNC_LAST_OK = Date.now();
+    SYNC_PENDING--;
+    if (SYNC_PENDING <= 0) { SYNC_PENDING = 0; setSyncStatus('ok'); }
+    else setSyncStatus('syncing');
+    return r;
+  } catch (e) {
+    SYNC_PENDING--;
+    if (SYNC_PENDING <= 0) { SYNC_PENDING = 0; setSyncStatus(navigator.onLine ? 'ok' : 'offline'); }
+    throw e;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => setSyncStatus('ok', 'Back online'));
+  window.addEventListener('offline', () => setSyncStatus('offline', 'Offline — changes will sync when reconnected'));
+}
+
 // ── CACHE HELPERS ──
+const CACHE_TTL_MS = 30000;
 function cacheKey(table) {
   return CT ? 'T' + CT.id + '_' + table : table;
 }
 function getCache(table) {
-  return CACHE[cacheKey(table)] || null;
+  const entry = CACHE[cacheKey(table)];
+  if (!entry) return null;
+  // Supports legacy plain-array cache entries (pre-v7.0)
+  if (Array.isArray(entry)) return entry;
+  return entry.data;
+}
+function getCacheFresh(table) {
+  const entry = CACHE[cacheKey(table)];
+  if (!entry || Array.isArray(entry)) return null;
+  if (Date.now() - entry.t > CACHE_TTL_MS) return null;
+  return entry.data;
 }
 function setCache(table, data) {
-  CACHE[cacheKey(table)] = data;
+  CACHE[cacheKey(table)] = { t: Date.now(), data };
   // Also write to localStorage as offline backup
   try { localStorage.setItem(cacheKey(table), JSON.stringify(data)); } catch(e) {}
 }
@@ -467,11 +522,11 @@ function getLocal(table) {
   try { return JSON.parse(localStorage.getItem(cacheKey(table))) || []; } catch(e) { return []; }
 }
 
-// ── SUPABASE READ (with cache) ──
+// ── SUPABASE READ (with TTL cache) ──
 async function sbRead(table, filter) {
   if (!CONFIGURED || !sb || !CT) return getLocal(table);
-  // Return cache if fresh (< 30 seconds old)
-  const cached = getCache(table);
+  // Return cache only if fresh (< 30 seconds old)
+  const cached = getCacheFresh(table);
   if (cached) return cached;
   try {
     let q = sb.from(table).select('*').eq('team_id', CT.id).order('created_at', {ascending: false});
@@ -707,21 +762,22 @@ const DB = {
     D.sFleet(fleet);
     if(!sb||!CT)return;
     try{
-      const row={team_id:CT.id,year:v.year,make:v.make,model:v.model,trim:v.trim||null,vin:v.vin||null,price:v.price?Number(v.price):null,rate:v.rate?Number(v.rate):null,trips:Number(v.trips)||0,status:v.status||'unlisted',mileage:v.mileage?Number(v.mileage):null,purchase_date:v.purchase_date||null,insurance_due:v.insurance_due||null,reg_due:v.reg_due||null,key_notes:v.key_notes||null};
+      const row={team_id:CT.id,year:v.year,make:v.make,model:v.model,trim:v.trim||null,vin:v.vin||null,price:v.price?Number(v.price):null,rate:v.rate?Number(v.rate):null,trips:Number(v.trips)||0,status:v.status||'unlisted',mileage:v.mileage?Number(v.mileage):null,purchase_date:v.purchase_date||null,insurance_due:v.insurance_due||null,reg_due:v.reg_due||null,key_notes:v.key_notes||null,updated_at:new Date().toISOString()};
       if(v.id){
-        await sb.from('vehicles').update(row).eq('id',v.id);
+        await trackSync(sb.from('vehicles').update(row).eq('id',v.id).then(r=>{if(r.error)throw r.error;return r;}));
       } else {
-        const{data}=await sb.from('vehicles').insert(row).select().single();
+        const{data,error}=await trackSync(sb.from('vehicles').insert(row).select().single().then(r=>{if(r.error)throw r.error;return r;}));
+        if(error)throw error;
         if(data){const i=idx!==undefined?idx:fleet.length-1;fleet[i].id=data.id;D.sFleet(fleet);}
       }
-    }catch(e){console.warn('DB.saveVehicle:',e.message);}
+    }catch(e){console.warn('DB.saveVehicle:',e.message);toast('Vehicle save failed — will retry');}
   },
 
   async deleteVehicle(idx){
     const fleet=D.fleet();const v=fleet[idx];
     fleet.splice(idx,1);D.sFleet(fleet);
     if(!sb||!v?.id)return;
-    try{await sb.from('vehicles').delete().eq('id',v.id);}
+    try{await trackSync(sb.from('vehicles').delete().eq('id',v.id).then(r=>{if(r.error)throw r.error;return r;}));}
     catch(e){console.warn('DB.deleteVehicle:',e.message);}
   },
 
@@ -730,7 +786,7 @@ const DB = {
     fleet[idx].trips=(parseInt(fleet[idx].trips||0)+1);
     D.sFleet(fleet);
     if(!sb||!fleet[idx].id)return;
-    try{await sb.from('vehicles').update({trips:fleet[idx].trips}).eq('id',fleet[idx].id);}
+    try{await trackSync(sb.from('vehicles').update({trips:fleet[idx].trips,updated_at:new Date().toISOString()}).eq('id',fleet[idx].id).then(r=>{if(r.error)throw r.error;return r;}));}
     catch(e){console.warn('DB.incrementTrips:',e.message);}
   },
 
@@ -752,8 +808,8 @@ const DB = {
     if(!sb||!CT)return;
     try{
       const fleet=D.fleet();const veh=fleet[exp.ci];
-      await sb.from('expenses').insert({team_id:CT.id,vehicle_id:veh?.id||null,amount:Number(exp.amount),category:exp.category,date:exp.date,notes:exp.notes||null,created_by:CU?.id||null});
-    }catch(e){console.warn('DB.saveExp:',e.message);}
+      await trackSync(sb.from('expenses').insert({team_id:CT.id,vehicle_id:veh?.id||null,amount:Number(exp.amount),category:exp.category,date:exp.date,notes:exp.notes||null,created_by:CU?.id||null}).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.saveExp:',e.message);toast('Expense save failed');}
   },
 
   async getBooks(){
@@ -774,8 +830,8 @@ const DB = {
     if(!sb||!CT)return;
     try{
       const fleet=D.fleet();const veh=fleet[book.ci];
-      await sb.from('bookings').insert({team_id:CT.id,vehicle_id:veh?.id||null,guest:book.guest,start_date:book.start,end_date:book.end,amount:Number(book.amount)||0,created_by:CU?.id||null});
-    }catch(e){console.warn('DB.saveBook:',e.message);}
+      await trackSync(sb.from('bookings').insert({team_id:CT.id,vehicle_id:veh?.id||null,guest:book.guest,start_date:book.start,end_date:book.end,amount:Number(book.amount)||0,created_by:CU?.id||null}).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.saveBook:',e.message);toast('Booking save failed');}
   },
 
   async getMaint(){
@@ -796,8 +852,8 @@ const DB = {
     if(!sb||!CT)return;
     try{
       const fleet=D.fleet();const veh=fleet[rec.ci];
-      await sb.from('maintenance').insert({team_id:CT.id,vehicle_id:veh?.id||null,type:rec.type,date:rec.date,cost:Number(rec.cost)||0,next_due:rec.nd||null,done_by:rec.by||null,notes:rec.notes||null});
-    }catch(e){console.warn('DB.saveMaint:',e.message);}
+      await trackSync(sb.from('maintenance').insert({team_id:CT.id,vehicle_id:veh?.id||null,type:rec.type,date:rec.date,cost:Number(rec.cost)||0,next_due:rec.nd||null,done_by:rec.by||null,notes:rec.notes||null}).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.saveMaint:',e.message);toast('Maintenance save failed');}
   },
 
   async getDetails(){
@@ -818,8 +874,8 @@ const DB = {
     if(!sb||!CT)return;
     try{
       const fleet=D.fleet();const veh=fleet[det.ci];
-      await sb.from('detailing').insert({team_id:CT.id,vehicle_id:veh?.id||null,date:det.date,condition:det.condition,done_by:det.by||null,cost:Number(det.cost)||0,notes:det.notes||null});
-    }catch(e){console.warn('DB.saveDetail:',e.message);}
+      await trackSync(sb.from('detailing').insert({team_id:CT.id,vehicle_id:veh?.id||null,date:det.date,condition:det.condition,done_by:det.by||null,cost:Number(det.cost)||0,notes:det.notes||null}).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.saveDetail:',e.message);toast('Detail save failed');}
   },
 
   async loadAll(){
@@ -3418,9 +3474,18 @@ function exportAll(){
     revImports:D.revImports()||[],
     activity:D.activity().slice(0,100)
   };
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='fleet-export-'+today()+'.json';a.click();URL.revokeObjectURL(url);
-  logAct('Data Exported');toast('Exported — '+Object.keys(data).length+' data categories');
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const ts=new Date().toISOString().replace(/[:]/g,'-').replace(/\..+/,''); // 2026-04-16T15-23-09
+  const fn='fleet-backup-'+ts+'.json';
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
+  // Rolling backup history metadata (last 12)
+  try{
+    const hist=D.get(D.tk('bkhist'),[]);
+    hist.unshift({ts:new Date().toISOString(),fn,sizeKB:Math.round(json.length/1024),counts:{fleet:data.fleet?.length||0,expenses:data.expenses?.length||0,bookings:data.bookings?.length||0,maintenance:data.maintenance?.length||0}});
+    D.set(D.tk('bkhist'),hist.slice(0,12));
+  }catch(e){}
+  logAct('Data Exported',fn);toast('Exported '+fn);
 }
 
 // ── COMMAND PALETTE ──
