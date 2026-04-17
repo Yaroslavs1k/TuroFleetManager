@@ -3133,6 +3133,7 @@ function renderSet(){
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<button class="btn btn-o" onclick="exportAll()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export All Data</button>'
     +'<button class="btn btn-o" onclick="showM(\'csv\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Turo CSV</button>'
+    +'<button class="btn btn-o" onclick="exportICS()" title="Download bookings as iCalendar (.ics) for Google/Apple Calendar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Export Calendar (.ics)</button>'
     +'</div>'
 
     // ABOUT
@@ -3555,6 +3556,65 @@ function exportAll(){
   logAct('Data Exported',fn);toast('Exported '+fn);
 }
 
+// iCalendar export — downloadable .ics file with all bookings
+function exportICS(){
+  const b=D.books()||[],f=D.fleet()||[];
+  if(!b.length){toast('No bookings to export');return;}
+  // RFC 5545 date formatting (YYYYMMDD for all-day)
+  const fmtDT=(s)=>{
+    if(!s)return '';
+    const d=new Date(s);
+    if(isNaN(d))return String(s).replace(/-/g,'');
+    return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  };
+  // Fold long lines per RFC 5545 (75 octets max)
+  const fold=(line)=>{
+    if(line.length<=75)return line;
+    let out=line.substring(0,75);
+    for(let i=75;i<line.length;i+=74)out+='\r\n '+line.substring(i,i+74);
+    return out;
+  };
+  // Escape special chars in text fields
+  const esc5545=(t)=>String(t||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TuroFleetManager//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Turo Fleet Bookings','X-WR-TIMEZONE:America/Los_Angeles'];
+  b.forEach((bk,i)=>{
+    const c=f[bk.ci]||{};
+    const carName=[c.year,c.make,c.model].filter(Boolean).join(' ')||'Vehicle';
+    const startD=fmtDT(bk.start);
+    const endD=fmtDT(bk.end);
+    if(!startD||!endD)return;
+    // iCal DTEND is exclusive for all-day events — add 1 day
+    const endDate=new Date(bk.end);endDate.setDate(endDate.getDate()+1);
+    const endExcl=endDate.getFullYear()+String(endDate.getMonth()+1).padStart(2,'0')+String(endDate.getDate()).padStart(2,'0');
+    const uid=(bk.id||('trip-'+i+'-'+startD))+'@turofleetmanager';
+    const summary=carName+' \u2014 '+(bk.guest||'Guest');
+    const descParts=[];
+    if(bk.guest)descParts.push('Guest: '+bk.guest);
+    if(bk.amount)descParts.push('Amount: $'+bk.amount);
+    if(bk.rating)descParts.push('Rating: '+bk.rating+'\u2605');
+    if(bk.notes)descParts.push(bk.notes);
+    lines.push('BEGIN:VEVENT');
+    lines.push(fold('UID:'+uid));
+    lines.push('DTSTAMP:'+stamp);
+    lines.push('DTSTART;VALUE=DATE:'+startD);
+    lines.push('DTEND;VALUE=DATE:'+endExcl);
+    lines.push(fold('SUMMARY:'+esc5545(summary)));
+    if(descParts.length)lines.push(fold('DESCRIPTION:'+esc5545(descParts.join('\n'))));
+    lines.push('STATUS:CONFIRMED');
+    lines.push('TRANSP:OPAQUE');
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const ics=lines.join('\r\n');
+  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const ts=new Date().toISOString().replace(/[:]/g,'-').replace(/\..+/,'');
+  const fn='turo-bookings-'+ts+'.ics';
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
+  logAct('Calendar Exported',b.length+' bookings \u2192 '+fn);
+  toast('Exported '+b.length+' bookings. Import into Google/Apple Calendar.');
+}
+
 // ── COMMAND PALETTE ──
 const CMDS=[
   {l:'Dashboard',h:'Navigate',a:()=>sw('dash',null)},
@@ -3574,6 +3634,7 @@ const CMDS=[
   {l:'Log Incident',h:'Fleet',a:()=>showM('incident')},
   {l:'Import Turo CSV',h:'Finances',a:()=>showM('csv')},
   {l:'Export Data',h:'Settings',a:()=>exportAll()},
+  {l:'Export Calendar (.ics)',h:'Settings',a:()=>exportICS()},
   {l:'Sign Out',h:'Account',a:()=>doLogout()},
 ];
 function openCmd(){document.getElementById('cmd-ov').classList.add('show');const i=document.getElementById('cmd-in');i.value='';i.focus();renderCmds('');}
