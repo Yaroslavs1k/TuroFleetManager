@@ -1610,21 +1610,29 @@ async function lookupVIN(){
     let marketData=null;
     let autoListingUrl='';
     let autoListingMeta=null;
+    // Market data fetch with retry cascade — many failure modes to handle:
+    //   1) Decode 422 → retry with NHTSA year/make/model override
+    //   2) Count=0 from default path → retry with explicit override (forces nationwide cascade)
+    //   3) Still empty → give up gracefully, downstream code uses segment math
+    async function _fetchMarket(url){
+      try{const r=await fetch(url);if(!r.ok&&r.status!==422)return{status:r.status,json:null};const j=await r.json().catch(()=>null);return{status:r.status,json:j};}catch(e){return{status:0,json:null};}
+    }
+    const baseUrl='https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip);
+    const overrideUrl=(cv.year&&cv.make&&cv.model)?baseUrl+'&year='+encodeURIComponent(cv.year)+'&make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model):null;
     try{
-      let mcRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
-      // If MarketCheck decode failed (422), retry with NHTSA's year/make/model as override
-      if(mcRes.status===422&&cv.year&&cv.make&&cv.model){
-        const fallbackUrl='https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip)+'&year='+encodeURIComponent(cv.year)+'&make='+encodeURIComponent(cv.make)+'&model='+encodeURIComponent(cv.model);
-        mcRes=await fetch(fallbackUrl);
+      let r=await _fetchMarket(baseUrl);
+      // Retry path 1: decode failed
+      if(r.status===422&&overrideUrl){r=await _fetchMarket(overrideUrl);}
+      // Retry path 2: got 200 but count=0 — try with override params anyway (might unlock different logic)
+      if(r.json&&(!r.json.count||r.json.count===0)&&overrideUrl){
+        const r2=await _fetchMarket(overrideUrl);
+        if(r2.json&&r2.json.count>0)r=r2;
       }
-      if(mcRes.ok){
-        const mcJson=await mcRes.json();
-        if(mcJson && mcJson.count>0 && mcJson.median_price>0){
-          marketData=mcJson;
-          // Promote real MSRP from MarketCheck if NHTSA didn't give us one
-          if(!cv.basePrice && marketData.specs && marketData.specs.msrp){
-            cv.basePrice=parseFloat(marketData.specs.msrp)||0;
-          }
+      const mcJson=r.json;
+      if(mcJson && mcJson.count>0 && mcJson.median_price>0){
+        marketData=mcJson;
+        if(!cv.basePrice && marketData.specs && marketData.specs.msrp){
+          cv.basePrice=parseFloat(marketData.specs.msrp)||0;
         }
       }
     }catch(e){/* offline or proxy down — fall back to depreciation math */}
@@ -1793,11 +1801,25 @@ async function lookupVIN(){
     const MKT=MARKETS[mkt]||MARKETS['Las Vegas'];
     const TD=MKT.seg[seg];
     const dailyMid=Math.round((TD.daily[0]+TD.daily[1])/2);
-    const insurEst=Math.round(askPrice*0.012/12);
-    const maintEst=isSport||isLux?420:isTruck?280:200;
-    const grossMonth=Math.round(dailyMid*TD.trips*2.5*(TD.occ/100));
+    // Realistic commercial/Turo-rider insurance — host's personal policy doesn't cover rental,
+    // Turo commercial riders cost roughly 6-8% of annual value per year for performance cars,
+    // 4-5% for luxury, 3% for economy. Divided by 12 = monthly estimate.
+    // Previous formula (1.2% of value / year) gave absurdly low numbers ($67/mo for a $67k BMW).
+    const insPctAnnual=isSport?0.075:isLux?0.050:isTruck?0.040:0.035;
+    const insurEst=Math.round(askPrice*insPctAnnual/12);
+    // Maintenance reserve — includes tires, brakes, oil, and unexpected repair fund
+    const maintEst=isSport?650:isLux?500:isTruck?350:250;
+    // Cleaning / detailing / supplies between trips — real cost most hosts forget
+    const cleanEst=isSport||isLux?180:120;
+    // Depreciation reserve — car loses value every month, treat it as cost of doing business
+    const depReserveMonth=Math.round(askPrice*0.015/12*12/12); // ~1.5% monthly roughly at age 3-5
+    const depReserve=Math.max(Math.round(askPrice*0.07/12),200); // ~7% annual loss as reserve
+    // Realistic occupancy — MARKETS defaults are often optimistic; cap at 50% for solo cars.
+    // New listings start at 25-35%, mature at 45-55%. Using 75% of market-default is safer.
+    const realOcc=Math.min(TD.occ*0.75,55);
+    const grossMonth=Math.round(dailyMid*TD.trips*2.5*(realOcc/100));
     const netMonth=Math.round(grossMonth*0.75);
-    const profitMonth=netMonth-insurEst-maintEst;
+    const profitMonth=netMonth-insurEst-maintEst-cleanEst-depReserve;
     const monthsBE=profitMonth>0?Math.ceil(askPrice/profitMonth):999;
 
     // ── Damage Risk ──
@@ -1813,7 +1835,7 @@ async function lookupVIN(){
     const scenarios=[{label:'Conservative',trips:6,days:2.0,col:'var(--tx2)'},{label:'Moderate',trips:9,days:2.5,col:'var(--acc2)'},{label:'Optimistic',trips:13,days:3.0,col:'var(--grn)'}].map(s=>{
       const gross=Math.round(dailyMid*s.trips*s.days);
       const net=Math.round(gross*0.75);
-      const profit=net-insurEst-maintEst;
+      const profit=net-insurEst-maintEst-cleanEst-depReserve;
       return{...s,gross,net,profit,be:profit>0?Math.ceil(askPrice/profit):999};
     });
 
@@ -1858,19 +1880,34 @@ async function lookupVIN(){
       for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
       return Math.round(v);
     });
+    // Mileage-based value modifier — even without live market data, we can differentiate
+    // "this car" from "typical" using the actual miles vs expected miles for age.
+    // Used ONLY when hasLiveMarket is false (otherwise the market median already reflects this).
+    const expMilesCurrent=Math.max(age,1)*13000;
+    const milesDelta=actMiles>0?(expMilesCurrent-actMiles)/expMilesCurrent:0;
+    const milesBasedPremium=milesDelta>0.5?0.10:milesDelta>0.3?0.07:milesDelta>0.15?0.04:milesDelta<-0.3?-0.08:milesDelta<-0.15?-0.04:0;
     const thisCarVals=chartYrs.map(y=>{
       if(y===0)return anchorMsrp;
+      // With live market: interpolate years 0 to current-age from MSRP -> live adjVal
       if(hasLiveMarket&&age>0&&y<=age){
         const t=y/age;
         return Math.round(anchorMsrp*(1-t)+adjVal*t);
       }
-      const startVal=hasLiveMarket?adjVal:anchorMsrp;
-      const startYr=hasLiveMarket?age:0;
-      let v2=startVal;
-      for(let i=startYr;i<y&&(i-startYr)<DEP_Y.length;i++)v2*=(1-DEP_Y[i-startYr]);
+      // Without live market: apply a mileage-based premium/discount on top of typical curve
+      if(!hasLiveMarket){
+        let v=anchorMsrp;
+        for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
+        // Premium peaks at current age (most recent miles data), fades for future years
+        const ageWeight=y<=age?1:Math.max(0,1-(y-age)/5);
+        const premium=milesBasedPremium*ageWeight;
+        return Math.round(v*(1+premium));
+      }
+      // Post-current-age (with live market): apply depreciation forward from adjVal
+      let v2=adjVal;
+      for(let i=age;i<y&&(i-age)<DEP_Y.length;i++)v2*=(1-DEP_Y[i-age]);
       return Math.round(v2);
     });
-    const chartVals=thisCarVals; // keep original var alive for backward-compat in table
+    const chartVals=thisCarVals;
     const swS=isSport?2:isLux?2:3,swE=isSport?5:isLux?5:6;
 
     // ── Damage-adjusted negotiation range ──
@@ -1880,10 +1917,23 @@ async function lookupVIN(){
     const riskPenaltyPct=riskScore>=8?0.05:riskScore>=7?0.02:0;
     const riskPenalty=Math.round(adjVal*riskPenaltyPct);
     const totalPenalty=recallPenalty+riskPenalty;
-    // Target Range = realistic settle zone, factoring asking price ceiling
-    const rangeLow=Math.max(openingOffer+1500,Math.round(openingOffer));
-    const rangeHighRaw=Math.round(tgt-totalPenalty);
-    const rangeHigh=askPrice>0?Math.min(rangeHighRaw,Math.round(askPrice*0.97)):rangeHighRaw;
+    // Target Range = realistic settle zone, factoring asking price ceiling + damage penalties.
+    // Guaranteed rangeLow <= rangeHigh — if math inverts (segment math sometimes returns tgt
+    // lower than openingOffer on undervalued fallback cases), we center the range instead.
+    let rangeLow=openingOffer+1500;
+    let rangeHighRaw=Math.round(tgt-totalPenalty);
+    let rangeHigh=askPrice>0?Math.min(rangeHighRaw,Math.round(askPrice*0.97)):rangeHighRaw;
+    if(rangeHigh<rangeLow){
+      // Math inverted — use asking-price-anchored range instead of market-anchored
+      if(askPrice>0){
+        rangeLow=openingOffer+1000;
+        rangeHigh=Math.max(openingOffer+2500,Math.round(askPrice*0.95));
+      } else {
+        const center=Math.round((rangeLow+rangeHigh)/2);
+        rangeLow=Math.max(openingOffer,center-2000);
+        rangeHigh=center+2000;
+      }
+    }
     // Walk away = never above asking (if asking is below fair market)
     const walkFinal=askPrice>0?Math.min(wk,askPrice):wk;
 
@@ -2210,7 +2260,7 @@ async function lookupVIN(){
     scenarios.forEach(s=>{
       H+='<div style="padding:10px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)">';
       H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:13px;font-weight:700;color:'+s.col+';margin-bottom:8px">'+s.label+'</div>';
-      H+=ROW('Trips/Month',''+s.trips)+ROW('Avg Days',''+s.days)+ROW('Gross Revenue',fmt$(s.gross))+ROW('After Turo 25%',fmt$(s.net))+ROW('Insurance','\u2013'+fmt$(insurEst))+ROW('Maintenance','\u2013'+fmt$(maintEst));
+      H+=ROW('Trips/Month',''+s.trips)+ROW('Avg Days',''+s.days)+ROW('Gross Revenue',fmt$(s.gross))+ROW('After Turo 25%',fmt$(s.net))+ROW('Insurance (commercial)','\u2013'+fmt$(insurEst))+ROW('Maintenance reserve','\u2013'+fmt$(maintEst))+ROW('Cleaning/supplies','\u2013'+fmt$(cleanEst))+ROW('Depreciation reserve','\u2013'+fmt$(depReserve));
       H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Net Profit/Mo',fmt$(s.profit),(s.profit>0?'var(--grn)':'var(--red)'))+'</div>';
       H+='<div style="margin-top:5px;font-size:10px;color:var(--tx3)">Break-even: '+(s.be<999?s.be+' months':'N/A')+'</div></div>';
     });
