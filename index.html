@@ -4285,7 +4285,7 @@ function renderWatchPage(){
       const verdictColor=s.verdict==='WORTH PURSUING'?'var(--grn)':s.verdict==='WALK'?'var(--red)':'var(--amb)';
       const verdictBg=s.verdict==='WORTH PURSUING'?'rgba(109,186,125,.12)':s.verdict==='WALK'?'rgba(196,122,106,.12)':'rgba(224,159,62,.12)';
       const statusDot=w.status==='bought'?'<span style="background:var(--grn);color:#0a0a0a;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">BOUGHT</span>':w.status==='passed'?'<span style="background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">PASSED</span>':'';
-      H+='<div class="cd reveal" style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px">'
+      H+='<div class="cd" style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
         +'<div style="flex:1;min-width:200px"><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--tx);cursor:pointer" onclick="openSavedCarInVIN(\''+w.id+'\')">'+esc(s.vName||'Vehicle')+statusDot+'</div>'
         +'<div style="font-size:10px;color:var(--tx3);margin-top:2px">VIN '+esc(s.vin||'')+' &middot; '+(s.miles||0).toLocaleString()+' mi</div>'
@@ -4315,6 +4315,8 @@ function renderWatchPage(){
   }
   el.innerHTML=H;
   _updateWatchBadge();
+  // Register any .reveal elements with the intersection observer so they fade in
+  if(typeof window._ar==='function')window._ar();
 }
 
 // Re-opens a saved car in the VIN Lookup page with ALL fields pre-filled and
