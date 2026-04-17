@@ -2085,33 +2085,33 @@ async function lookupVIN(){
     H+='</div>'; // /vin-full (end of Phase 5.4 full-report wrapper)
 
     // ── RESEARCH LINKS + ACTIONS ──
-    // Link strategy (2026-04-17, verified URL patterns):
-    //   - DIRECT (URL opens the specific VIN):
-    //       NHTSA recalls   — ?vin={VIN}
-    //       Carfax          — /vehicle/{VIN}
-    //   - MARKET-FILTERED (shows same make/model in user's ZIP):
-    //       Turo            — /search?defaultZipCode={zip}&makes={Make}&models={Make}-{Model}
-    //       AutoTempest     — aggregates CarGurus/AutoTrader/Cars.com/Craigslist at user's ZIP
-    //   - FORM-ONLY (site ignores VIN in URL, user must paste):
-    //       KBB, Edmunds, NICB, AutoCheck — onclick copies VIN to clipboard + toasts
-    // Removed: Turo /models/ route (404s) and CarGurus /Cars/l-Used- route (404s).
+    // Link strategy (2026-04-17, verified live by driving Chrome):
+    //   - MARKET-FILTERED (direct — shows same make/model in user's ZIP, no VIN needed):
+    //       Turo         — /search?defaultZipCode={zip}&makes={Make}&models={Model}  (Model alone, NOT Make-Model)
+    //       AutoTempest  — aggregates CarGurus/AutoTrader/Cars.com/Craigslist at user's ZIP
+    //   - FORM-ONLY (every free VIN site gates behind a form — click copies VIN to clipboard + toasts,
+    //     user lands on the form and pastes. Verified broken "direct" URLs removed:
+    //       ❌ Carfax /vehicle/{VIN} — 404 "page doesn't exist"
+    //       ❌ Carfax legacy byVin.cfx — "getting a tune-up" error
+    //       ❌ iSeeCars /vin/{VIN} — 404
+    //       ❌ vPIC /decoder/Decoder?VIN=... — 404
+    //       ⚠️ NHTSA /recalls?vin=... — page loads but VIN does NOT auto-fill the form
     const _titleCase=(s)=>(s||'').toString().split(/[\s-]+/).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
     const mkCap=_titleCase(cv.make),mdCap=_titleCase(cv.model);
     const mkUrl=encodeURIComponent(mkCap);
     const mdUrl=encodeURIComponent(mdCap);
-    const turoModelParam=encodeURIComponent(mkCap+'-'+mdCap.replace(/\s+/g,'-'));
     const copyHandler='navigator.clipboard&&navigator.clipboard.writeText(\''+vin+'\').then(()=>toast(\'VIN copied \u2014 paste on form\'));';
     H+='<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span><span class="sh-a" onclick="'+copyHandler+'" title="Copy VIN to clipboard">&#128203; Copy VIN</span></div>';
-    H+='<div style="font-size:10px;color:var(--tx3);margin-bottom:6px;line-height:1.5">Direct (VIN pre-loaded): NHTSA, Carfax. Market-filtered (your ZIP + make/model): Turo, AutoTempest. Form-only (click copies VIN): KBB, Edmunds, NICB, AutoCheck.</div>';
+    H+='<div style="font-size:10px;color:var(--tx3);margin-bottom:6px;line-height:1.5">Market-filtered (opens directly): <strong>Turo, AutoTempest</strong>. All other sites are form-only \u2014 click auto-copies VIN, paste on their form.</div>';
     H+='<div class="rg" style="margin-bottom:14px">'
-      +'<a class="rl" href="https://www.nhtsa.gov/recalls?vin='+vin+'" target="_blank" rel="noopener" title="VIN-specific recall lookup">NHTSA Recalls</a>'
-      +'<a class="rl" href="https://www.carfax.com/vehicle/'+vin+'" target="_blank" rel="noopener" title="Carfax VIN history">Carfax</a>'
-      +'<a class="rl" href="https://turo.com/us/en/search?country=US&defaultZipCode='+encodeURIComponent(zip)+'&makes='+mkUrl+'&models='+turoModelParam+'&itemsPerPage=200" target="_blank" rel="noopener" title="Turo \u2014 same make/model near ZIP '+zip+'">Turo (my market)</a>'
+      +'<a class="rl" href="https://turo.com/us/en/search?country=US&defaultZipCode='+encodeURIComponent(zip)+'&makes='+mkUrl+'&models='+mdUrl+'&itemsPerPage=200" target="_blank" rel="noopener" title="Turo \u2014 same make/model near ZIP '+zip+'">Turo (my market)</a>'
       +'<a class="rl" href="https://www.autotempest.com/results?make='+mkUrl+'&model='+mdUrl+'&minyear='+cv.year+'&maxyear='+cv.year+'&zip='+encodeURIComponent(zip)+'&radius=100" target="_blank" rel="noopener" title="AutoTempest \u2014 aggregates CarGurus, AutoTrader, Cars.com, Craigslist">AutoTempest</a>'
+      +'<a class="rl" href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="NHTSA recalls form \u2014 VIN copied for paste">NHTSA Recalls</a>'
       +'<a class="rl" href="https://www.kbb.com/whats-my-car-worth/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="KBB value form \u2014 VIN copied for paste">KBB Value</a>'
       +'<a class="rl" href="https://www.edmunds.com/appraisal/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="Edmunds appraisal \u2014 VIN copied for paste">Edmunds</a>'
-      +'<a class="rl" href="https://www.nicb.org/vincheck" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="NICB theft/salvage \u2014 VIN copied for paste">NICB</a>'
+      +'<a class="rl" href="https://www.nicb.org/vincheck" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="NICB theft/salvage \u2014 VIN copied for paste">NICB VINCheck</a>'
       +'<a class="rl" href="https://www.autocheck.com/vehiclehistory/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="AutoCheck history \u2014 VIN copied for paste">AutoCheck</a>'
+      +'<a class="rl" href="https://vpic.nhtsa.dot.gov/decoder/" target="_blank" rel="noopener" onclick="'+copyHandler+'" title="NHTSA VIN decoder \u2014 VIN copied for paste">vPIC Decoder</a>'
       +'</div>';
     H+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">'+(canEdit()?'<button class="btn btn-o" onclick="addFromVIN()">+ Add to Fleet</button>':'')+'</div>';
 
