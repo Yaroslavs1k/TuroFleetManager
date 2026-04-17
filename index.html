@@ -1572,11 +1572,53 @@ const MARKETS={
 
 // ── VIN LOOKUP ──
 let cv=null;let depChart=null;
+
+// Listing URL → VIN extraction. Looks for VIN in common URL patterns.
+// 17-char VIN regex excludes I/O/Q (never used in VINs) but we allow them loosely
+// then validate post-extraction via the canonical charset.
+const _VIN_URL_PATTERNS=[
+  /\/vin\/([A-HJ-NPR-Z0-9]{17})(?:[\/?#]|$)/i,
+  /[?&]vin=([A-HJ-NPR-Z0-9]{17})/i,
+  /\/listing\/([A-HJ-NPR-Z0-9]{17})/i,
+  /\/(?:inventory|vehicle|vehicledetails|used|new)\/[^\/]*?([A-HJ-NPR-Z0-9]{17})/i,
+  /\b([A-HJ-NPR-Z0-9]{17})\b/i
+];
+function extractVinFromUrl(url){
+  if(!url||typeof url!=='string')return null;
+  if(!/^https?:\/\//i.test(url))return null;
+  for(const pat of _VIN_URL_PATTERNS){
+    const m=url.match(pat);
+    if(m&&m[1]&&/^[A-HJ-NPR-Z0-9]{17}$/i.test(m[1]))return m[1].toUpperCase();
+  }
+  return null;
+}
+// Auto-fill the VIN field when user pastes a listing URL that contains one.
+// Safe to call from oninput/onchange/onblur — idempotent, only fills if VIN input is empty.
+function _autoExtractVinFromListingUrl(){
+  const urlEl=document.getElementById('lu-url');
+  const vinEl=document.getElementById('vin-i');
+  if(!urlEl||!vinEl)return;
+  const url=urlEl.value.trim();
+  if(!url)return;
+  const found=extractVinFromUrl(url);
+  if(!found)return;
+  // Only auto-populate if VIN field is currently empty or a DIFFERENT VIN (user changed URL).
+  const currentVin=vinEl.value.trim().toUpperCase();
+  if(!currentVin){
+    vinEl.value=found;
+    if(typeof toast==='function')toast('\u2713 VIN extracted from URL \u2014 hit DECODE');
+  } else if(currentVin!==found){
+    // Different URL pointing to a different VIN — offer a soft prompt
+    if(typeof toast==='function')toast('URL contains VIN '+found+' (different from input)');
+  }
+}
 function renderVin(){
-  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:900px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div class="fg"><div class="fl">Asking / Purchase Price (optional)</div><input type="number" class="fi" id="pp-i" placeholder="e.g. 28500"></div><div class="fg"><div class="fl">Listing URL (optional)<span style="font-weight:400;color:var(--tx3);margin-left:6px">\u2014 paste from CarGurus, AutoTrader, Facebook Marketplace, etc.</span></div><input type="url" class="fi" id="lu-url" placeholder="https://..." autocomplete="off"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7;margin-top:4px">Decode any VIN to generate a full <strong style="color:var(--acc2)">14-section fleet analysis</strong> &mdash; Negotiation Card, valuation, Turo market data, ROI calculator, damage risk score, depreciation curve, and exit strategy. Paste the listing URL to jump back to it from the Watchlist later.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px"></div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; running fleet analysis...</div></div>';
+  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:900px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div class="fg"><div class="fl">Asking / Purchase Price (optional)</div><input type="number" class="fi" id="pp-i" placeholder="e.g. 28500"></div><div class="fg"><div class="fl">Listing URL (optional)<span style="font-weight:400;color:var(--tx3);margin-left:6px">\u2014 paste from CarGurus, AutoTrader, Facebook Marketplace, etc.</span></div><input type="url" class="fi" id="lu-url" placeholder="https://..." autocomplete="off" onchange="_autoExtractVinFromListingUrl()" onblur="_autoExtractVinFromListingUrl()" oninput="if(this.value.length>20)_autoExtractVinFromListingUrl()"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7;margin-top:4px">Decode any VIN to generate a full <strong style="color:var(--acc2)">14-section fleet analysis</strong> &mdash; Negotiation Card, valuation, Turo market data, ROI calculator, damage risk score, depreciation curve, and exit strategy. Paste the listing URL to jump back to it from the Watchlist later.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px"></div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; running fleet analysis...</div></div>';
 }
 
 async function lookupVIN(){
+  // If user pasted a listing URL but didn't trigger blur, try extracting VIN from it now.
+  _autoExtractVinFromListingUrl();
   const vin=document.getElementById('vin-i').value.trim().toUpperCase();
   const miles=document.getElementById('mi-i').value.trim();
   const zip=document.getElementById('zi-i').value.trim()||'89014';
