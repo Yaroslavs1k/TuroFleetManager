@@ -2002,13 +2002,16 @@ async function lookupVIN(){
     const exitScenarios=[];
     let yrRunningVal=adjVal;
     let yrCumRevenue=0;
+    // Use profitMonth (realistic, includes occupancy scaling) — NOT scenarios[1].profit
+    // which assumes trips*days with no occupancy derating and overstated the yearly by ~7x.
+    const realAnnualTuroProfit=profitMonth*12;
     for(let y=1;y<=7;y++){
       const depIdx=Math.min(age+y-1,DEP_Y.length-1);
       const depRate=DEP_Y[depIdx]||0.05;
       const prevVal=yrRunningVal;
       yrRunningVal=Math.round(prevVal*(1-depRate));
       const annualDepLoss=prevVal-yrRunningVal;
-      const annualTuroProfit=scenarios[1].profit*12;
+      const annualTuroProfit=realAnnualTuroProfit;
       const annualNet=annualTuroProfit-annualDepLoss;
       yrCumRevenue+=annualTuroProfit;
       const cumPnL=yrCumRevenue+yrRunningVal-askPrice;
@@ -2032,7 +2035,7 @@ async function lookupVIN(){
     // Back-compat: keep these vars used by later sections
     const exitYrs=bestExit.year;
     const exitVal=bestExit.resaleVal;
-    const totalRev=bestExit.year*scenarios[1].profit*12;
+    const totalRev=bestExit.year*realAnnualTuroProfit;
     const lifePL=bestExit.cumPnL;
 
     // ── Depreciation Curve Data (dual-track) ──
@@ -2667,7 +2670,7 @@ async function lookupVIN(){
       ? 'After year '+tippingYear.year+', annual depreciation exceeds Turo profit \u2014 every extra month of ownership bleeds money. Target exit is year '+bestExit.year+' when cumulative P&L peaks at '+fmt$(bestExit.cumPnL)+'.'
       : 'Car stays profit-positive through full 7-year projection. Best exit based on cumulative P&L is year '+bestExit.year+'. '+esc(segLabel)+' cars typically sell strongest at '+segMilestoneLabel+'.';
     H+='<div style="margin-top:10px;padding:10px;background:var(--sf);border-radius:var(--rs);font-size:11px;color:var(--tx2);line-height:1.6">'+rationale+'</div>';
-    H+='<div style="margin-top:6px;font-size:9px;color:var(--tx3);line-height:1.5">Annual profit = moderate scenario ('+scenarios[1].trips+' trips/mo, '+scenarios[1].days+' days avg) after insurance, maintenance, cleaning, depreciation reserve. Resale uses segment depreciation forward from this car\'s live market value. Clean Carfax + documented services = top-of-range resale.</div>';
+    H+='<div style="margin-top:6px;font-size:9px;color:var(--tx3);line-height:1.5">Annual profit = realistic monthly profit \u00d7 12 (includes '+Math.round(realOcc)+'% occupancy derate, Turo fees, insurance, maintenance, cleaning, depreciation reserve). Resale uses segment depreciation forward from this car\'s live market value. Clean Carfax + documented services = top-of-range resale.</div>';
     H+='</div></div>';
 
     H+='</div>'; // /vin-full (end of Phase 5.4 full-report wrapper)
