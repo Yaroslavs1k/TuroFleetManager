@@ -433,6 +433,8 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="mo" id="m-newteam"><div class="ml" id="ml-newteam"></div></div>
 <div class="mo" id="m-editteam"><div class="ml" id="ml-editteam"></div></div>
 <div class="mo" id="m-editveh"><div class="ml" id="ml-editveh"></div></div>
+<div class="mo" id="m-nextcar"><div class="ml" id="ml-nextcar" style="max-width:640px;max-height:92vh"></div></div>
+<div class="mo" id="m-cashflow"><div class="ml" id="ml-cashflow" style="max-width:680px;max-height:92vh"></div></div>
 <div class="toast" id="toast"></div>
 </div>
 <script>
@@ -1312,6 +1314,8 @@ function showM(id){
     document.getElementById('ml-profile').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Your Account</span><span class="sh-l"></span></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+_avCircle+'<div><div style="font-size:15px;font-weight:600">'+(CU.name||'--')+'</div><div style="font-size:11px;color:var(--tx3)">'+(CU.email||'--')+'</div><div style="margin-top:4px">'+rb(SA?'superadmin':teamRole())+'</div></div></div>'+(CT?'<div class="cd-r"><span class="l">Team</span><span class="v">'+esc(CT.name)+'</span></div><div class="cd-r"><span class="l">Team Code</span><span class="v" style="font-family:monospace">'+CT.code+'</span></div>':'')+'<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-d btn-f" onclick="hideM();sw(\'set\',null)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Edit Profile</button><button class="btn btn-red btn-f" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button></div>';
   }
   document.getElementById('m-'+id).classList.add('show');
+  // Auto-render dynamic modal contents on open
+  if(id==='cashflow'&&typeof renderCashflowForecast==='function')setTimeout(renderCashflowForecast,50);
 }
 function hideM(){document.querySelectorAll('.mo').forEach(m=>m.classList.remove('show'));}
 function populateDD(){
@@ -1512,6 +1516,8 @@ function renderDash(){
     +'<div class="reveal" style="display:flex;gap:8px;flex-wrap:wrap">'
     +'<button class="btn btn-r" onclick="sw(\'vin\',null)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>Decode VIN</button>'
     +(canEdit()?'<button class="btn btn-o" onclick="showM(\'vehicle\')">+ Add Vehicle</button><button class="btn btn-o" onclick="showM(\'booking\')">+ Log Trip</button><button class="btn btn-o" onclick="showM(\'expense\')">+ Log Expense</button><button class="btn btn-o" onclick="showM(\'detail\')">+ Log Detail</button>':'')
+    +'<button class="btn btn-o" onclick="showM(\'nextcar\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Next Car</button>'
+    +'<button class="btn btn-o" onclick="showM(\'cashflow\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>30d Cashflow</button>'
     +'<button class="btn btn-o" onclick="exportAll()">Export Data</button>'
     +'</div>';
 
@@ -3418,6 +3424,44 @@ function buildModals(){
     +'<div class="fg"><label class="fl">Select CSV File</label><input type="file" id="csv-file" accept=".csv" class="fi" style="padding:10px" onchange="previewCSV(this)"></div>'
     +'<div id="csv-preview" style="display:none;margin-bottom:12px"></div>'
     +'<div style="display:flex;gap:8px"><button class="btn btn-r btn-f" id="csv-import-btn" onclick="importCSV()">Import</button><button class="btn btn-o btn-f" onclick="hideM()">Cancel</button></div>';
+
+  // NEXT-CAR RECOMMENDER
+  const _mkts=Object.keys(MARKETS||{});
+  const _mkt=D.get('turoMkt','Las Vegas');
+  const _ownedSegs=(D.fleet()||[]).map(v=>_classifySeg(v)).filter(Boolean);
+  document.getElementById('ml-nextcar').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">Next Car Recommender</span><span class="sh-l"></span></div>'
+    +'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--tx2);line-height:1.6">Enter your budget and market. We\'ll rank the 4 Turo segments by projected monthly profit and flag what fills gaps in your current fleet.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+    +'<div class="fg" style="margin-bottom:0"><label class="fl">Budget ($)</label><input type="number" class="fi" id="nc-budget" placeholder="e.g. 25000" value="25000"></input></div>'
+    +'<div class="fg" style="margin-bottom:0"><label class="fl">Market</label><select class="fi" id="nc-market">'+_mkts.map(m=>'<option value="'+m+'"'+(m===_mkt?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn btn-r btn-f" onclick="runNextCarRecommendation()">Recommend Next Car</button><button class="btn btn-o" onclick="hideM()">Close</button></div>'
+    +'<div id="nc-results"></div>';
+
+  // CASHFLOW FORECAST
+  document.getElementById('ml-cashflow').innerHTML='<div class="sh" style="margin-top:0"><span class="sh-t">30-Day Cashflow Forecast</span><span class="sh-l"></span></div>'
+    +'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--tx2);line-height:1.6">Projects daily cash position for the next 30 days. Confirmed bookings + recurring monthly expenses (insurance, loans, etc.) + scheduled maintenance.</div>'
+    +'<div id="cf-content"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-o btn-f" onclick="hideM()">Close</button></div>';
+}
+
+// Classify a vehicle into one of the 4 Turo market segments
+function _classifySeg(v){
+  if(!v||!v.make)return null;
+  const make=(v.make||'').toLowerCase();
+  const model=(v.model||'').toLowerCase();
+  const price=Number(v.price||0);
+  // Sport/exotic markers
+  if(/porsche|ferrari|lamborghini|mclaren|aston|bentley|rolls/.test(make))return 'sport';
+  if(/corvette|gt-r|gtr|mustang gt|camaro ss|challenger srt|supra|nsx|viper|cayman|boxster|911/.test(model))return 'sport';
+  // Luxury
+  if(/bmw|mercedes|mercedes-benz|audi|lexus|genesis|jaguar|range|acura|infiniti|cadillac|lincoln|maserati|alfa/.test(make))return 'luxury';
+  if(/tesla/.test(make)&&price>35000)return 'luxury';
+  // Trucks / big SUVs
+  if(/f-150|silverado|ram 1500|ram 2500|tundra|tacoma|colorado|ranger|frontier|ridgeline|titan/.test(model))return 'truck';
+  if(/tahoe|suburban|expedition|yukon|sequoia|navigator|escalade|armada/.test(model))return 'truck';
+  // Default economy
+  return 'economy';
 }
 
 // ── SAVE FUNCTIONS ──
@@ -3732,6 +3776,160 @@ function exportScheduleC(year){
   toast('Exported '+fn);
 }
 
+// ── NEXT-CAR RECOMMENDER ──
+// Uses MARKETS[mkt].seg data to project monthly P&L per segment.
+// Flags segments missing from current fleet (portfolio diversification).
+const SEG_CANDIDATES={
+  sport:{label:'Sport / Exotic',examples:'Corvette, Supra, Mustang GT, 911',priceHints:'20-60k used',risk:8},
+  luxury:{label:'Luxury Sedan/SUV',examples:'BMW 3/5, Tesla Model 3/Y, Lexus, Genesis',priceHints:'18-45k used',risk:5},
+  truck:{label:'Truck / Large SUV',examples:'F-150, Silverado, Tahoe, Tacoma',priceHints:'20-50k used',risk:4},
+  economy:{label:'Economy / Midsize',examples:'Camry, Accord, Corolla, Altima, CR-V',priceHints:'8-20k used',risk:3}
+};
+function runNextCarRecommendation(){
+  const budget=Number(document.getElementById('nc-budget').value||0);
+  const mkt=document.getElementById('nc-market').value;
+  const el=document.getElementById('nc-results');
+  if(!budget||budget<5000){el.innerHTML='<div style="color:var(--amb);font-size:11px;padding:8px;background:rgba(224,159,62,.08);border-radius:6px">Enter a budget of at least $5,000.</div>';return;}
+  const m=MARKETS[mkt];if(!m){el.innerHTML='<div style="color:var(--red);font-size:11px">Unknown market.</div>';return;}
+  const ownedSegs=new Set((D.fleet()||[]).map(v=>_classifySeg(v)).filter(Boolean));
+  // Rough monthly operating cost (insurance + maintenance reserve + depreciation per month)
+  // Simplified: 8% of purchase price per month covers ins + maint + depreciation reserve
+  const opCostPct={sport:0.11,luxury:0.085,truck:0.075,economy:0.06};
+  const candidates=Object.keys(SEG_CANDIDATES).map(seg=>{
+    const cand=SEG_CANDIDATES[seg];
+    const segData=m.seg[seg];if(!segData)return null;
+    const [loRate,hiRate]=segData.daily;
+    const avgRate=(loRate+hiRate)/2;
+    const avgTripsPerMonth=segData.trips;
+    const occ=segData.occ;
+    // Monthly revenue estimate: use occupancy × days × avg rate (more realistic than trips × rate)
+    const daysInMo=30;
+    const revMonthly=Math.round((occ/100)*daysInMo*avgRate);
+    // Monthly Turo take ~25% for Standard plan (protection) — assume it's already net to host in these rates
+    // But platform fee typically applies on top, so subtract 10-15% adjustment
+    const revAfterFees=Math.round(revMonthly*0.85);
+    // Fit to budget: can afford a car in this segment?
+    let priceRange;
+    if(seg==='sport')priceRange=[18000,60000];
+    else if(seg==='luxury')priceRange=[16000,45000];
+    else if(seg==='truck')priceRange=[18000,50000];
+    else priceRange=[7000,22000];
+    const fits=budget>=priceRange[0];
+    const effectivePrice=Math.min(budget,Math.min(priceRange[1],budget));
+    const monthlyOp=Math.round(effectivePrice*opCostPct[seg]/12*12/12); // monthly depreciation/ins/maint
+    const monthlyOpSimple=Math.round(effectivePrice*opCostPct[seg]);
+    const netMonthly=revAfterFees-monthlyOpSimple;
+    const risk=cand.risk;
+    // Ownership gap bonus — reward segments we don't already own (portfolio diversity)
+    const gapBonus=ownedSegs.has(seg)?0:0.15;
+    const score=(netMonthly/1000)*(1+gapBonus) - (risk*0.3);
+    // Payback months
+    const paybackMonths=netMonthly>0?Math.ceil(effectivePrice/netMonthly):999;
+    return {seg,cand,segData,fits,revMonthly:revAfterFees,opMonthly:monthlyOpSimple,netMonthly,risk,score,paybackMonths,gap:!ownedSegs.has(seg),effectivePrice};
+  }).filter(Boolean).sort((a,b)=>b.score-a.score);
+  el.innerHTML='<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:var(--acc2);margin-bottom:8px">Ranked by projected monthly profit \u2014 '+esc(mkt)+'</div>'
+    +candidates.map((c,i)=>{
+      const color=c.netMonthly>=600?'var(--grn)':c.netMonthly>=200?'var(--amb)':'var(--red)';
+      const rank=['#1','#2','#3','#4'][i];
+      return '<div style="background:var(--sf);border:1px solid '+(i===0?'rgba(181,136,99,.5)':'var(--bd)')+';border-radius:10px;padding:11px;margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        +'<div><span style="font-family:Rajdhani,sans-serif;font-size:13px;color:var(--acc2);font-weight:700">'+rank+' \u2014 '+c.cand.label+'</span>'
+        +(c.gap?' <span style="font-size:9px;background:rgba(52,184,125,.15);color:var(--grn);padding:2px 6px;border-radius:8px;margin-left:4px">FILLS GAP</span>':'<span style="font-size:9px;background:rgba(181,136,99,.15);color:var(--tx3);padding:2px 6px;border-radius:8px;margin-left:4px">OWNED</span>')
+        +'</div>'
+        +'<strong style="font-family:Rajdhani,sans-serif;color:'+color+';font-size:17px">'+fmt$(c.netMonthly)+'/mo</strong>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--tx3);margin-bottom:6px">'+c.cand.examples+' &middot; '+c.cand.priceHints+'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:10px">'
+        +'<div><div style="color:var(--tx3)">Revenue/mo</div><strong style="color:var(--grn)">'+fmt$(c.revMonthly)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Operating</div><strong style="color:var(--red)">-'+fmt$(c.opMonthly)+'</strong></div>'
+        +'<div><div style="color:var(--tx3)">Risk</div><strong style="color:'+(c.risk<=4?'var(--grn)':c.risk<=6?'var(--amb)':'var(--red)')+'">'+c.risk+'/10</strong></div>'
+        +'<div><div style="color:var(--tx3)">Payback</div><strong>'+(c.paybackMonths<999?c.paybackMonths+' mo':'N/A')+'</strong></div>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--tx2);margin-top:7px;line-height:1.5;border-top:1px solid var(--bd);padding-top:7px">'+esc(c.segData.comp)+'</div>'
+        +'</div>';
+    }).join('')
+    +'<div style="font-size:9px;color:var(--tx3);margin-top:10px;line-height:1.5">Estimates based on market rates in MARKETS config &times; occupancy &times; 85% net-after-fees. Operating cost assumes '+(budget<=22000?'6-9':'8-11')+'% of purchase price per month covering insurance, routine maintenance, and depreciation reserve. Actual results vary.</div>';
+}
+
+// ── 30-DAY CASHFLOW FORECAST ──
+function renderCashflowForecast(){
+  const el=document.getElementById('cf-content');if(!el)return;
+  const now=new Date();
+  const days=[];
+  for(let i=0;i<30;i++){const d=new Date(now);d.setDate(now.getDate()+i);days.push({d:d,iso:d.toISOString().split('T')[0],inflow:0,outflow:0,items:[]});}
+  // Confirmed upcoming bookings → inflows on end date (Turo pays after trip ends)
+  const b=D.books()||[];
+  b.forEach(x=>{
+    if(!x.end||!x.amount)return;
+    const endD=new Date(x.end);
+    // Payout assumed 3 days after trip end
+    const payD=new Date(endD);payD.setDate(endD.getDate()+3);
+    const day=days.find(dd=>dd.iso===payD.toISOString().split('T')[0]);
+    if(day){day.inflow+=Number(x.amount||0);day.items.push({t:'in',label:x.guest+' payout',amt:Number(x.amount||0)});}
+  });
+  // Scheduled maintenance with nd (next due) in window
+  const m=D.maint()||[];const f=D.fleet()||[];
+  m.forEach(x=>{
+    if(!x.nd)return;
+    const day=days.find(dd=>dd.iso===x.nd);
+    if(day&&x.cost){const car=f[x.ci]||{};day.outflow+=Number(x.cost);day.items.push({t:'out',label:'Maint: '+(x.type||'')+' \u2014 '+(car.make||''),amt:Number(x.cost)});}
+  });
+  // Recurring monthly expenses — infer from last 3 months of recurring categories
+  const exps=D.exps()||[];
+  const recurringCats=['Insurance','Loan','Lease','Subscription'];
+  const monthlyRecurring=[];
+  recurringCats.forEach(cat=>{
+    const recent=exps.filter(x=>x.category===cat).slice(-3);
+    if(recent.length>=1){
+      const avg=recent.reduce((s,x)=>s+Number(x.amount||0),0)/recent.length;
+      if(avg>0){
+        // Assume payment due on the 1st of upcoming months
+        days.forEach(day=>{if(day.d.getDate()===1){day.outflow+=avg;day.items.push({t:'out',label:cat+' (recurring)',amt:avg});}});
+        monthlyRecurring.push({cat,avg});
+      }
+    }
+  });
+  // Running balance
+  let running=0;
+  const series=days.map(d=>{running+=d.inflow-d.outflow;return{...d,balance:running};});
+  const totalIn=days.reduce((s,d)=>s+d.inflow,0);
+  const totalOut=days.reduce((s,d)=>s+d.outflow,0);
+  const net=totalIn-totalOut;
+  // Find lowest balance day
+  const minDay=series.reduce((lo,d)=>d.balance<lo.balance?d:lo,series[0]);
+  // Build simple chart via inline SVG
+  const W=560,H=140,PAD=22;
+  const maxB=Math.max(...series.map(d=>d.balance),0);
+  const minB=Math.min(...series.map(d=>d.balance),0);
+  const range=Math.max(1,maxB-minB);
+  const pts=series.map((d,i)=>{
+    const x=PAD+(i/(series.length-1))*(W-PAD*2);
+    const y=H-PAD-((d.balance-minB)/range)*(H-PAD*2);
+    return x+','+y;
+  }).join(' ');
+  const zeroY=H-PAD-((0-minB)/range)*(H-PAD*2);
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'
+    +'<div class="sc" style="padding:10px"><div class="sc-sub">Inflows (30d)</div><div class="sc-val grn" style="font-size:17px">'+fmt$(totalIn)+'</div></div>'
+    +'<div class="sc" style="padding:10px"><div class="sc-sub">Outflows (30d)</div><div class="sc-val red" style="font-size:17px">'+fmt$(totalOut)+'</div></div>'
+    +'<div class="sc" style="padding:10px"><div class="sc-sub">Net</div><div class="sc-val '+(net>=0?'grn':'red')+'" style="font-size:17px">'+fmt$(net)+'</div></div>'
+    +'</div>'
+    +'<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px">'
+    +'<div style="font-size:11px;color:var(--tx2);margin-bottom:6px">Projected daily cash balance</div>'
+    +'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'
+    +'<line x1="'+PAD+'" y1="'+zeroY+'" x2="'+(W-PAD)+'" y2="'+zeroY+'" stroke="rgba(255,255,255,.15)" stroke-dasharray="3,3"/>'
+    +'<polyline points="'+pts+'" fill="none" stroke="rgb(181,136,99)" stroke-width="2"/>'
+    +series.map((d,i)=>{const x=PAD+(i/(series.length-1))*(W-PAD*2);const y=H-PAD-((d.balance-minB)/range)*(H-PAD*2);const hasActivity=d.inflow||d.outflow;return hasActivity?'<circle cx="'+x+'" cy="'+y+'" r="2.5" fill="'+(d.inflow>=d.outflow?'var(--grn)':'var(--red)')+'"/>':'';}).join('')
+    +'<text x="'+PAD+'" y="'+(H-4)+'" fill="var(--tx3)" font-size="9">Today</text>'
+    +'<text x="'+(W-PAD-24)+'" y="'+(H-4)+'" fill="var(--tx3)" font-size="9">+30d</text>'
+    +'</svg></div>'
+    +(minDay.balance<0?'<div style="background:rgba(235,86,86,.08);border:1px solid rgba(235,86,86,.3);border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px;color:var(--red)"><strong>\u26a0 Cash shortfall projected:</strong> balance dips to '+fmt$(minDay.balance)+' on '+minDay.iso+'</div>':'')
+    +'<div style="font-size:11px;color:var(--tx2);font-weight:600;margin-bottom:4px">Upcoming events</div>'
+    +'<div style="max-height:180px;overflow-y:auto;background:var(--sf);border:1px solid var(--bd);border-radius:8px">'
+    +(series.filter(d=>d.items.length).map(d=>'<div style="padding:6px 10px;border-bottom:1px solid var(--bd);font-size:11px"><strong style="color:var(--tx2)">'+d.iso+'</strong> &middot; balance '+fmt$(d.balance)+(d.items.map(it=>'<div style="padding:2px 0 0 14px;color:'+(it.t==='in'?'var(--grn)':'var(--red)')+'">'+(it.t==='in'?'+':'-')+fmt$(it.amt)+' '+esc(it.label)+'</div>').join(''))+'</div>').join('')||'<div style="padding:10px;font-size:11px;color:var(--tx3);text-align:center">No upcoming events in the next 30 days.</div>')
+    +'</div>'
+    +'<div style="font-size:9px;color:var(--tx3);margin-top:8px;line-height:1.5">Payouts assumed 3 days after trip end. Recurring expenses inferred from last 3 months (Insurance, Loan, Lease, Subscription). For precision, log recurring monthly bills.</div>';
+}
+
 // ── COMMAND PALETTE ──
 const CMDS=[
   {l:'Dashboard',h:'Navigate',a:()=>sw('dash',null)},
@@ -3753,6 +3951,8 @@ const CMDS=[
   {l:'Export Data',h:'Settings',a:()=>exportAll()},
   {l:'Export Calendar (.ics)',h:'Settings',a:()=>exportICS()},
   {l:'Export Schedule C (Tax)',h:'Finances',a:()=>{sw('fin',null);setTimeout(()=>exportScheduleC(new Date().getFullYear()-1),300);}},
+  {l:'Next Car Recommender',h:'Fleet',a:()=>showM('nextcar')},
+  {l:'30-Day Cashflow Forecast',h:'Finances',a:()=>showM('cashflow')},
   {l:'Sign Out',h:'Account',a:()=>doLogout()},
 ];
 function openCmd(){document.getElementById('cmd-ov').classList.add('show');const i=document.getElementById('cmd-in');i.value='';i.focus();renderCmds('');}
