@@ -1264,6 +1264,7 @@ function launch(){
         setTimeout(()=>{
           const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null)el.value=val;};
           set('vin-i',v);set('mi-i',p.get('miles')||'');set('pp-i',p.get('ask')||'');set('zi-i',p.get('zip')||'89014');
+          const lu=p.get('listing')||'';if(/^https?:\/\//i.test(lu))set('lu-url',lu);
           if(typeof lookupVIN==='function')lookupVIN();
         },250);
       }
@@ -1572,7 +1573,7 @@ const MARKETS={
 // ── VIN LOOKUP ──
 let cv=null;let depChart=null;
 function renderVin(){
-  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:900px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div class="fg"><div class="fl">Asking / Purchase Price (optional)</div><input type="number" class="fi" id="pp-i" placeholder="e.g. 28500"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7;margin-top:4px">Decode any VIN to generate a full <strong style="color:var(--acc2)">14-section fleet analysis</strong> &mdash; Negotiation Card, valuation, Turo market data, ROI calculator, damage risk score, depreciation curve, and exit strategy.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px"></div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; running fleet analysis...</div></div>';
+  document.getElementById('pg-vin').innerHTML='<div class="sh"><span class="sh-t">VIN Lookup</span><span class="sh-l"></span></div><div class="g2" style="max-width:900px"><div><div class="fg"><div class="fl">VIN Number</div><input type="text" class="fi" id="vin-i" placeholder="Enter 17-character VIN" maxlength="17" autocomplete="off"></div><div class="fg"><div class="fl">Mileage</div><input type="number" class="fi" id="mi-i" placeholder="e.g. 15,289"></div><div class="fg"><div class="fl">Asking / Purchase Price (optional)</div><input type="number" class="fi" id="pp-i" placeholder="e.g. 28500"></div><div class="fg"><div class="fl">Listing URL (optional)<span style="font-weight:400;color:var(--tx3);margin-left:6px">\u2014 paste from CarGurus, AutoTrader, Facebook Marketplace, etc.</span></div><input type="url" class="fi" id="lu-url" placeholder="https://..." autocomplete="off"></div><div style="display:flex;gap:8px"><div class="fg" style="flex:1"><div class="fl">ZIP Code</div><input type="text" class="fi" id="zi-i" placeholder="89014" maxlength="5" value="89014"></div><div style="align-self:flex-end;padding-bottom:11px"><button class="btn btn-r" id="lu-btn" onclick="lookupVIN()">DECODE</button></div></div><div style="background:rgba(181,136,99,.06);border:1px solid rgba(181,136,99,.15);border-radius:8px;padding:10px;font-size:11px;color:var(--tx3);line-height:1.7;margin-top:4px">Decode any VIN to generate a full <strong style="color:var(--acc2)">14-section fleet analysis</strong> &mdash; Negotiation Card, valuation, Turo market data, ROI calculator, damage risk score, depreciation curve, and exit strategy. Paste the listing URL to jump back to it from the Watchlist later.</div></div><div id="vin-side" style="display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:12px;text-align:center;padding:20px"></div></div><div id="vin-res" style="display:none"></div><div id="vin-load" style="display:none;text-align:center;padding:46px"><div class="spin" style="margin:0 auto 11px"></div><div style="font-size:11px;color:var(--tx3)">Decoding VIN &amp; running fleet analysis...</div></div>';
 }
 
 async function lookupVIN(){
@@ -1580,6 +1581,9 @@ async function lookupVIN(){
   const miles=document.getElementById('mi-i').value.trim();
   const zip=document.getElementById('zi-i').value.trim()||'89014';
   const pp=document.getElementById('pp-i').value.trim();
+  const listingUrl=(document.getElementById('lu-url')||{}).value?.trim()||'';
+  // Accept only http/https URLs — safety against javascript: schemes, etc.
+  const safeListingUrl=/^https?:\/\//i.test(listingUrl)?listingUrl:'';
   if(vin.length!==17){toast('VIN must be 17 characters');return;}
   document.getElementById('vin-res').style.display='none';
   document.getElementById('vin-load').style.display='block';
@@ -1879,7 +1883,7 @@ async function lookupVIN(){
     // so the negotiation card + PDF export can reconstruct the analysis without re-querying APIs.
     window._vinSnap={
       vin:vin,year:cv.year,make:cv.make,model:cv.model,trim:cv.trim||'',bodyStyle:cv.bodyClass||'',
-      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,
+      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,listingUrl:safeListingUrl,
       verdict:qVerdict,tgt:tgt,mx:mx,wk:wk,profitMonth:profitMonth,riskScore:riskScore,riskLabel:riskLabel,
       breakEvenMonths:monthsBE,segLabel:segLabel,
       marketMedian:marketMedian,marketCompCount:(hasLiveMarket&&marketData)?marketData.count:0,
@@ -2150,6 +2154,20 @@ async function lookupVIN(){
     const mdUrl=encodeURIComponent(mdCap);
     const copyHandler='navigator.clipboard&&navigator.clipboard.writeText(\''+vin+'\').then(()=>toast(\'VIN copied \u2014 paste on form\'));';
     H+='<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span><span class="sh-a" onclick="'+copyHandler+'" title="Copy VIN to clipboard">&#128203; Copy VIN</span></div>';
+    // Listing access row — primary action if user pasted a listing URL, fallback to Google VIN search
+    if(safeListingUrl){
+      H+='<div style="background:rgba(109,186,125,.08);border:1px solid rgba(109,186,125,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+        +'<div style="flex:1;min-width:200px"><div style="font-size:10px;color:var(--tx3);letter-spacing:1px;text-transform:uppercase;font-weight:700">Listing saved</div><div style="font-size:11px;color:var(--tx2);word-break:break-all;margin-top:2px">'+esc(safeListingUrl.length>80?safeListingUrl.slice(0,80)+'\u2026':safeListingUrl)+'</div></div>'
+        +'<a class="btn btn-r" href="'+esc(safeListingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing &rarr;</a>'
+        +'</div>';
+    } else {
+      H+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+        +'<div style="flex:1;min-width:200px;font-size:11px;color:var(--tx3);line-height:1.5">No listing URL \u2014 hunt for it on the web by VIN.</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22+for+sale" target="_blank" rel="noopener" style="text-decoration:none">Search Google by VIN</a>'
+        +'<a class="btn btn-o btn-s" href="https://www.autotempest.com/results?vin='+encodeURIComponent(vin)+'" target="_blank" rel="noopener" style="text-decoration:none">Search AutoTempest</a>'
+        +'</div></div>';
+    }
     H+='<div style="font-size:10px;color:var(--tx3);margin-bottom:6px;line-height:1.5">Market-filtered (opens directly): <strong>Turo, AutoTempest</strong>. All other sites are form-only \u2014 click auto-copies VIN, paste on their form.</div>';
     H+='<div class="rg" style="margin-bottom:14px">'
       +'<a class="rl" href="https://turo.com/us/en/search?country=US&defaultZipCode='+encodeURIComponent(zip)+'&makes='+mkUrl+'&models='+mdUrl+'&itemsPerPage=200" target="_blank" rel="noopener" title="Turo \u2014 same make/model near ZIP '+zip+'">Turo (my market)</a>'
@@ -4302,6 +4320,9 @@ function renderWatchPage(){
         +'</div>'
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
         +'<button class="btn btn-r btn-s" onclick="openSavedCarInVIN(\''+w.id+'\')">Open Full Report</button>'
+        +(s.listingUrl
+          ?'<a class="btn btn-o btn-s" href="'+esc(s.listingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing \u2197</a>'
+          :'<button class="btn btn-o btn-s" onclick="addListingUrl(\''+w.id+'\')" title="Add a listing URL">+ Listing URL</button>')
         +'<button class="btn btn-o btn-s" onclick="exportWatchlistPDF(\''+w.id+'\')">PDF</button>'
         +'<button class="btn btn-o btn-s" onclick="exportWatchlistDoc(\''+w.id+'\')">Doc</button>'
         +(canEdit()?'<button class="btn btn-o btn-s" onclick="addWatchlistToFleet(\''+w.id+'\')">+ Fleet</button>':'')
@@ -4328,6 +4349,7 @@ function openSavedCarInVIN(id){
   setTimeout(()=>{
     const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
     set('vin-i',s.vin);set('mi-i',s.miles);set('pp-i',s.askPrice);set('zi-i',s.zip||'89014');
+    set('lu-url',s.listingUrl||'');
     if(typeof lookupVIN==='function')lookupVIN();
   },150);
 }
@@ -4356,8 +4378,10 @@ function exportCurrentVINDoc(){
 }
 function copyCurrentVINLink(){
   const s=window._vinSnap;if(!s||!s.vin){toast('Decode a VIN first');return;}
-  // Deep-link format: #vin={VIN}&miles=X&ask=Y&zip=Z  — opens app and auto-decodes
-  const params=new URLSearchParams({vin:s.vin,miles:s.miles||'',ask:s.askPrice||'',zip:s.zip||''});
+  // Deep-link format: #vin={VIN}&miles=X&ask=Y&zip=Z&listing=URL — opens app and auto-decodes
+  const p={vin:s.vin,miles:s.miles||'',ask:s.askPrice||'',zip:s.zip||''};
+  if(s.listingUrl)p.listing=s.listingUrl;
+  const params=new URLSearchParams(p);
   const url=location.origin+location.pathname+'#'+params.toString();
   if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>toast('Share link copied'));
   else{const t=document.createElement('textarea');t.value=url;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Share link copied');}
@@ -4371,6 +4395,20 @@ function removeWatchlist(id){
   else if(typeof renderWatchlist==='function')renderWatchlist();
   _updateWatchBadge();
   toast('Removed');
+}
+function addListingUrl(id){
+  const list=D.savedCars();
+  const w=list.find(x=>x.id===id);if(!w||!w.snapshot)return;
+  const current=w.snapshot.listingUrl||'';
+  const url=prompt('Paste the listing URL (CarGurus, AutoTrader, Facebook Marketplace, etc.):',current);
+  if(url===null)return;
+  const trimmed=url.trim();
+  if(trimmed&&!/^https?:\/\//i.test(trimmed)){toast('URL must start with http:// or https://');return;}
+  w.snapshot.listingUrl=trimmed;
+  w.updatedAt=new Date().toISOString();
+  D.sSavedCars(list);
+  if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
+  toast(trimmed?'Listing URL saved':'Listing URL removed');
 }
 function setWatchlistStatus(id,status){
   const list=D.savedCars();
@@ -4413,6 +4451,7 @@ function _buildWatchlistDetailHTML(w){
     +'<h1 style="margin:6px 0 4px;font-size:24px;color:#111">'+esc(s.vName||'Vehicle')+'</h1>'
     +'<div style="font-size:11px;color:#555">VIN '+esc(s.vin||'')+' &middot; '+(s.miles||0).toLocaleString()+' mi &middot; ZIP '+esc(s.zip||'')+' &middot; '+esc(s.segLabel||'')+'</div>'
     +'<div style="font-size:10px;color:#888;margin-top:3px">Saved '+(w.savedAt||'').slice(0,10)+' &middot; Status: '+statusLbl+'</div>'
+    +(s.listingUrl?'<div style="font-size:10px;margin-top:4px"><a href="'+esc(s.listingUrl)+'" style="color:#b58863;text-decoration:underline">\u2197 Open original listing</a></div>':'')
     +'</div>'
     +'<div style="background:'+vColor+';color:#fff;padding:14px 18px;border-radius:8px;margin-bottom:18px">'
     +'<div style="font-size:11px;letter-spacing:2px;opacity:.85;text-transform:uppercase">Verdict</div>'
