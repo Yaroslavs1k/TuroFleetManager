@@ -1990,13 +1990,50 @@ async function lookupVIN(){
     const mileDeduct=Math.round(turoMiYear*0.67);
     const effCost=askPrice-s179Save;
 
-    // ── Exit Strategy ──
-    const exitYrs=mi100>0?Math.round(mi100/12):Math.round((150000-startMi)/totalMiYear);
-    let exitVal=adjVal;
-    for(let i=0;i<Math.min(exitYrs,DEP_Y.length);i++) exitVal*=(1-(DEP_Y[Math.min(age+i,DEP_Y.length-1)]||0.06));
-    exitVal=Math.round(exitVal);
-    const totalRev=scenarios[1].profit*12*exitYrs;
-    const lifePL=totalRev+exitVal-askPrice;
+    // ── Exit Strategy (year-by-year tipping-point + scenario table) ──
+    // For each future year, compute:
+    //   - projected resale value at end of year (applying this segment's depreciation)
+    //   - annual Turo profit (moderate scenario from scenarios[1])
+    //   - annual depreciation loss (= prev value - resale value)
+    //   - annual net = Turo profit - depreciation loss
+    //   - cumulative P&L if sold at end of that year
+    // Tipping point = first year where annualNet flips negative (hold beyond this = losing money
+    // faster than earning). Best exit = year with highest cumulative P&L.
+    const exitScenarios=[];
+    let yrRunningVal=adjVal;
+    let yrCumRevenue=0;
+    for(let y=1;y<=7;y++){
+      const depIdx=Math.min(age+y-1,DEP_Y.length-1);
+      const depRate=DEP_Y[depIdx]||0.05;
+      const prevVal=yrRunningVal;
+      yrRunningVal=Math.round(prevVal*(1-depRate));
+      const annualDepLoss=prevVal-yrRunningVal;
+      const annualTuroProfit=scenarios[1].profit*12;
+      const annualNet=annualTuroProfit-annualDepLoss;
+      yrCumRevenue+=annualTuroProfit;
+      const cumPnL=yrCumRevenue+yrRunningVal-askPrice;
+      const estMiles=Math.round(startMi+totalMiYear*y);
+      exitScenarios.push({
+        year:y,ageAtExit:age+y,estMiles,
+        resaleVal:yrRunningVal,annualDepLoss,annualTuroProfit,annualNet,cumPnL
+      });
+    }
+    // Best exit = max cumPnL; tipping point = first year where annualNet becomes ≤ 0
+    let bestExitIdx=0;
+    for(let i=1;i<exitScenarios.length;i++){
+      if(exitScenarios[i].cumPnL>exitScenarios[bestExitIdx].cumPnL)bestExitIdx=i;
+    }
+    const bestExit=exitScenarios[bestExitIdx];
+    const tippingIdx=exitScenarios.findIndex(s=>s.annualNet<=0);
+    const tippingYear=tippingIdx>=0?exitScenarios[tippingIdx]:null;
+    // Segment-specific "max recommended miles" milestone
+    const sellMiLo=isSport?40000:isLux?75000:isTruck?130000:100000;
+    const sellMiHi=isSport?60000:isLux?90000:isTruck?150000:120000;
+    // Back-compat: keep these vars used by later sections
+    const exitYrs=bestExit.year;
+    const exitVal=bestExit.resaleVal;
+    const totalRev=bestExit.year*scenarios[1].profit*12;
+    const lifePL=bestExit.cumPnL;
 
     // ── Depreciation Curve Data (dual-track) ──
     // TWO lines now:
@@ -2582,15 +2619,55 @@ async function lookupVIN(){
     H+='</div></div>';
 
     // ── 14 EXIT STRATEGY ──
+    // Shows: (1) best-year recommendation, (2) tipping point, (3) full scenario table
+    // All numbers car-specific, using this car's live market value + segment depreciation.
+    const milestoneMoLo=totalMiYear>0?Math.round(Math.max(0,(sellMiLo-startMi)/totalMiYear*12)):0;
+    const milestoneMoHi=totalMiYear>0?Math.round(Math.max(0,(sellMiHi-startMi)/totalMiYear*12)):0;
+    const segMilestoneLabel=sellMiLo.toLocaleString()+'–'+sellMiHi.toLocaleString()+' mi';
+    const milestoneTimeLabel=(milestoneMoLo===0&&milestoneMoHi===0)?'Already past upper bound':
+      milestoneMoLo===0?'up to '+milestoneMoHi+' mo away':
+      milestoneMoLo+'–'+milestoneMoHi+' months away';
     H+='<div style="margin-bottom:14px">'+SH('14','Exit Strategy &amp; Resale Timing');
-    H+='<div class="cd"><div class="g3" style="margin-bottom:12px">';
-    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Sell Before</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--acc2)">100k mi</div><div style="font-size:10px;color:var(--tx3)">'+(mi100>0?'~'+mi100+' months away':'Already past')+'</div></div>';
-    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Projected Resale</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:var(--grn)">'+fmt$(exitVal)+'</div></div>';
-    H+='<div style="text-align:center;padding:10px;background:var(--sf);border-radius:var(--rs)"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">Lifetime P&amp;L</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:20px;font-weight:700;color:'+(lifePL>0?'var(--grn)':'var(--red)')+'">'+fmt$(lifePL)+'</div></div>';
+    H+='<div class="cd">';
+    // Top summary row — best exit + segment milestone + tipping point
+    H+='<div class="g3" style="margin-bottom:14px">';
+    H+='<div style="text-align:center;padding:11px;background:rgba(109,186,125,.08);border:1px solid rgba(109,186,125,.3);border-radius:var(--rs)"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px;font-weight:700">BEST EXIT YEAR</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--grn);line-height:1">Year '+bestExit.year+'</div><div style="font-size:10px;color:var(--tx3);margin-top:3px">Age '+bestExit.ageAtExit+'yr &middot; ~'+Math.round(bestExit.estMiles/1000)+'k mi</div><div style="font-size:11px;color:var(--grn);margin-top:4px;font-weight:700">Peak P&amp;L: '+fmt$(bestExit.cumPnL)+'</div></div>';
+    H+='<div style="text-align:center;padding:11px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px;font-weight:700">'+esc(segLabel.toUpperCase())+' MILESTONE</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:16px;font-weight:700;color:var(--acc2);line-height:1.2">'+segMilestoneLabel+'</div><div style="font-size:10px;color:var(--tx3);margin-top:5px">'+esc(milestoneTimeLabel)+'</div></div>';
+    if(tippingYear){
+      H+='<div style="text-align:center;padding:11px;background:rgba(224,159,62,.07);border:1px solid rgba(224,159,62,.3);border-radius:var(--rs)"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px;font-weight:700">TIPPING POINT</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:22px;font-weight:700;color:var(--amb);line-height:1">Year '+tippingYear.year+'</div><div style="font-size:10px;color:var(--tx3);margin-top:3px">Profit < depreciation after this</div></div>';
+    } else {
+      H+='<div style="text-align:center;padding:11px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)"><div style="font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px;font-weight:700">TIPPING POINT</div><div style="font-family:\'Rajdhani\',sans-serif;font-size:16px;font-weight:700;color:var(--tx2);line-height:1.2">Beyond 7yr</div><div style="font-size:10px;color:var(--tx3);margin-top:5px">Profit &gt; depreciation for full projection</div></div>';
+    }
     H+='</div>';
-    H+=ROW('Purchase Price',fmt$(askPrice))+ROW('Total Revenue ('+exitYrs+'yr moderate)','+'+fmt$(totalRev),'var(--grn)')+ROW('Projected Resale','+'+fmt$(exitVal),'var(--grn)');
-    H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Net Fleet P&L',fmt$(lifePL),(lifePL>0?'var(--grn)':'var(--red)'))+'</div>';
-    H+='<div style="margin-top:10px;font-size:10px;color:var(--tx3)">Exit before 100k for best resale position. After 100k, value drops faster than incremental Turo revenue compensates. Clean Carfax + documented services = top-of-range resale.</div>';
+    // Scenario table
+    H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:7px">SELL-AT-YEAR SCENARIOS</div>';
+    H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="border-bottom:1px solid var(--bd)">';
+    ['Hold','Age','Miles','Resale','Ann. Dep','Ann. Profit','Ann. Net','Cum. P&L'].forEach(h2=>{H+='<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:600;font-family:\'Rajdhani\',sans-serif;color:var(--tx3)">'+h2+'</th>';});
+    H+='</tr></thead><tbody>';
+    exitScenarios.forEach((s2,i)=>{
+      const isBest=i===bestExitIdx;
+      const isTipping=tippingIdx>=0&&i===tippingIdx;
+      const rowBg=isBest?'background:rgba(109,186,125,.07)':isTipping?'background:rgba(224,159,62,.05)':'';
+      const netCol=s2.annualNet>=0?'var(--grn)':'var(--red)';
+      const pnlCol=s2.cumPnL>=0?'var(--grn)':'var(--red)';
+      H+='<tr style="border-bottom:1px solid rgba(211,195,185,.04);'+rowBg+'">'
+        +'<td style="padding:5px 8px;text-align:right;font-family:\'Rajdhani\',sans-serif;font-weight:600;color:'+(isBest?'var(--grn)':'var(--tx)')+'">'+s2.year+'yr'+(isBest?' \u2190 BEST':'')+(isTipping?' \u26A0':'')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:var(--tx3)">'+s2.ageAtExit+'yr</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:var(--tx3)">'+Math.round(s2.estMiles/1000)+'k</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+fmt$(s2.resaleVal)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:var(--red)">\u2013'+fmt$(s2.annualDepLoss)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:var(--grn)">+'+fmt$(s2.annualTuroProfit)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:'+netCol+';font-weight:'+(isTipping?'700':'400')+'">'+(s2.annualNet>=0?'+':'')+fmt$(s2.annualNet)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;color:'+pnlCol+';font-weight:'+(isBest?'700':'400')+'">'+(s2.cumPnL>=0?'+':'')+fmt$(s2.cumPnL)+'</td>'
+        +'</tr>';
+    });
+    H+='</tbody></table></div>';
+    // Rationale
+    const rationale=tippingYear
+      ? 'After year '+tippingYear.year+', annual depreciation exceeds Turo profit \u2014 every extra month of ownership bleeds money. Target exit is year '+bestExit.year+' when cumulative P&L peaks at '+fmt$(bestExit.cumPnL)+'.'
+      : 'Car stays profit-positive through full 7-year projection. Best exit based on cumulative P&L is year '+bestExit.year+'. '+esc(segLabel)+' cars typically sell strongest at '+segMilestoneLabel+'.';
+    H+='<div style="margin-top:10px;padding:10px;background:var(--sf);border-radius:var(--rs);font-size:11px;color:var(--tx2);line-height:1.6">'+rationale+'</div>';
+    H+='<div style="margin-top:6px;font-size:9px;color:var(--tx3);line-height:1.5">Annual profit = moderate scenario ('+scenarios[1].trips+' trips/mo, '+scenarios[1].days+' days avg) after insurance, maintenance, cleaning, depreciation reserve. Resale uses segment depreciation forward from this car\'s live market value. Clean Carfax + documented services = top-of-range resale.</div>';
     H+='</div></div>';
 
     H+='</div>'; // /vin-full (end of Phase 5.4 full-report wrapper)
