@@ -1645,6 +1645,8 @@ async function lookupVIN(){
               state:exact.dealer?.state||'',
               price:exact.price||null,
               miles:exact.miles||null,
+              phone:exact.dealer?.phone||'',
+              website:exact.dealer?.website||'',
               source:'MarketCheck (exact VIN match)'
             };
             const luEl=document.getElementById('lu-url');if(luEl&&!luEl.value)luEl.value=autoListingUrl;
@@ -2200,6 +2202,18 @@ async function lookupVIN(){
         +'<div style="font-size:10px;color:var(--tx3);word-break:break-all;margin-top:3px">'+esc(finalListingUrl.length>80?finalListingUrl.slice(0,80)+'\u2026':finalListingUrl)+'</div></div>'
         +'<a class="btn btn-r" href="'+esc(finalListingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing &rarr;</a>'
         +'</div>';
+      // Dealer-level fallbacks — if the auto-found URL is dead (common: MarketCheck stale data),
+      // these help the user reach the dealer by phone, by website, or find the car via Google.
+      if(isAuto&&meta&&(meta.phone||meta.website||meta.dealer)){
+        H+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px">'
+          +'<div style="color:var(--tx3);margin-bottom:6px;line-height:1.5">Listing URL broken? Use these dealer-level fallbacks:</div>'
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          +(meta.phone?'<a class="btn btn-o btn-s" href="tel:'+esc(meta.phone.replace(/[^0-9+]/g,''))+'" style="text-decoration:none">\u260e '+esc(meta.phone)+'</a>':'')
+          +(meta.website?'<a class="btn btn-o btn-s" href="https://'+esc(meta.website.replace(/^https?:\/\//,''))+'" target="_blank" rel="noopener" style="text-decoration:none">Dealer Inventory</a>':'')
+          +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q='+encodeURIComponent('"'+vin+'" '+(meta.dealer||''))+'" target="_blank" rel="noopener" style="text-decoration:none">Google "VIN + dealer"</a>'
+          +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22" target="_blank" rel="noopener" style="text-decoration:none">Google VIN</a>'
+          +'</div></div>';
+      }
     } else {
       // Edmunds VIN-direct URL pattern verified 2026-04-17: edmunds.com/{make}/{model}/{year}/vin/{VIN}/
       // Indexes most franchise-dealer-listed VINs. Returns 404 if the car was never on Edmunds.
