@@ -1466,7 +1466,27 @@ function renderDash(){
         '</div>';
     }).join('')+'</div>';
 
+  // Monthly CSV import banner — show days 1-5 if not dismissed/imported this month
+  let csvBanner='';
+  try{
+    const dom=now.getDate();
+    const dismissed=D.get('csvBanner_dismiss','');
+    const lastImport=D.get('csvBanner_lastImport','');
+    // Show for first 5 days of the month, hide if dismissed OR already imported this month
+    if(dom<=5&&dismissed!==tm&&lastImport!==tm&&f.length>0){
+      const prevMo=new Date(now.getFullYear(),now.getMonth()-1,1);
+      const prevLbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][prevMo.getMonth()]+' '+prevMo.getFullYear();
+      csvBanner='<div id="csv-banner" class="reveal" style="background:linear-gradient(135deg,rgba(181,136,99,.12),rgba(181,136,99,.04));border:1px solid rgba(181,136,99,.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+        +'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+        +'<div style="flex:1;min-width:220px"><div style="font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;color:var(--acc2);letter-spacing:.3px">Import '+prevLbl+' earnings from Turo</div>'
+        +'<div style="font-size:11px;color:var(--tx2);margin-top:2px;line-height:1.5">New month \u2014 log last month\'s trips in one shot. Duplicates auto-skipped.</div></div>'
+        +'<div style="display:flex;gap:6px"><button class="btn btn-r" onclick="showM(\'csv\')" style="padding:7px 14px;font-size:11px">Import CSV</button>'
+        +'<button class="btn btn-o" onclick="dismissCsvBanner()" style="padding:7px 11px;font-size:11px" title="Hide until next month">\u00d7</button></div>'
+        +'</div>';
+    }
+  }catch(_){}
   document.getElementById('pg-dash').innerHTML=(SA?'<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:7px"><svg width="12" height="12" viewBox="0 0 24 24" fill="var(--sa)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><strong style="color:var(--sa)">Super Admin Mode</strong></div>':'')
+    +csvBanner
     +'<div class="sh reveal"><span class="sh-t">'+(CT?CT.name+' &mdash; ':'')+'Overview</span><span class="sh-l"></span>'+(isOwner()&&CT?'<span class="sh-a" onclick="showEditTeam()">&#9998; Edit Team</span>':'')+'</div>'
     +'<div class="g4">'
     +'<div class="sc reveal reveal-d1" onclick="sw(\'fin\',null)"><div class="sc-sub">Net Profit</div><div class="sc-val '+(net>=0?'grn':'red')+'" data-a="'+net+'" data-p="$" data-d="0">$0</div><div class="sc-lbl">This Month</div></div>'
@@ -3420,6 +3440,9 @@ function saveIncident(){if(!canEdit()){toast('Permission denied');return;}const 
 function _parseCSVLine(line){const vals=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}else cur+=ch;}vals.push(cur.trim());return vals;}
 function _csvRows(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(!lines.length)return{hdrs:[],rows:[]};const hdrs=_parseCSVLine(lines[0]).map(h=>h.replace(/^"|"$/g,''));const rows=lines.slice(1).map(l=>{const vals=_parseCSVLine(l);const o={};hdrs.forEach((h,i)=>o[h]=(vals[i]||'').replace(/^"|"$/g,''));return o;});return{hdrs,rows};}
 function _getAmt(r){const KEYS=['Trip Earnings','Host earnings','Net earnings','Net Earnings','Earnings','Amount','Total','Payout','Revenue','Your earnings','Subtotal'];for(const k of KEYS){const v=Number((r[k]||'').replace(/[$,]/g,''));if(v>0)return v;}return 0;}
+function _getAmtKey(r){const KEYS=['Trip Earnings','Host earnings','Net earnings','Net Earnings','Earnings','Amount','Total','Payout','Revenue','Your earnings','Subtotal'];for(const k of KEYS){const v=Number((r[k]||'').replace(/[$,]/g,''));if(v>0)return k;}return null;}
+function _getDateKey(r){const KEYS=['Date','Trip Date','Start Date','Reservation Date','Pickup Date','Trip Start'];for(const k of KEYS){if(r[k])return k;}return null;}
+function _getTripId(r){const KEYS=['Reservation ID','Trip ID','Reservation','ID','Booking ID','Confirmation'];for(const k of KEYS){if(r[k]&&String(r[k]).trim())return String(r[k]).trim();}return null;}
 function previewCSV(input){
   const file=input.files[0];if(!file)return;
   const prev=document.getElementById('csv-preview');
@@ -3427,14 +3450,35 @@ function previewCSV(input){
   reader.onload=function(e){
     const{hdrs,rows}=_csvRows(e.target.result);
     if(!hdrs.length){prev.style.display='block';prev.innerHTML='<div style="color:var(--red);font-size:11px;padding:8px;background:rgba(196,122,106,.1);border-radius:6px">Empty or unreadable file. Make sure it\'s a CSV text file.</div>';return;}
-    const amtKey=Object.keys(rows[0]||{}).find(k=>_getAmt(rows[0])>0||(k.toLowerCase().includes('earn')||k.toLowerCase().includes('amount')||k.toLowerCase().includes('payout')))||null;
     const validRows=rows.filter(r=>_getAmt(r)>0);
     const previewRows=validRows.slice(0,3);
-    if(!validRows.length){prev.style.display='block';prev.innerHTML='<div style="color:var(--amb);font-size:11px;padding:8px;background:rgba(224,159,62,.08);border-radius:6px">Could not find earnings amounts in this CSV. Expected columns like "Trip Earnings" or "Net Earnings". Found columns: <code style="font-size:10px">'+hdrs.join(', ')+'</code></div>';return;}
+    if(!validRows.length){prev.style.display='block';prev.innerHTML='<div style="color:var(--amb);font-size:11px;padding:8px;background:rgba(224,159,62,.08);border-radius:6px">Could not find earnings amounts in this CSV. Expected columns like "Trip Earnings" or "Net Earnings". Found columns: <code style="font-size:10px">'+esc(hdrs.join(', '))+'</code></div>';return;}
+    // Detect column mapping
+    const amtKey=_getAmtKey(validRows[0])||'(detected)';
+    const dateKey=_getDateKey(validRows[0])||'(none)';
+    const idSample=validRows.find(r=>_getTripId(r));
+    const idKey=idSample?(Object.keys(idSample).find(k=>_getTripId(idSample)===String(idSample[k]).trim())||'(none)'):'(none)';
+    // Dedupe check
+    const existing=D.revImports()||[];
+    const existingIds=new Set(existing.map(r=>_getTripId(r)).filter(Boolean));
+    const dupeCount=idKey!=='(none)'?validRows.filter(r=>{const id=_getTripId(r);return id&&existingIds.has(id);}).length:0;
+    const newCount=validRows.length-dupeCount;
     prev.style.display='block';
-    prev.innerHTML='<div style="font-size:11px;color:var(--grn);padding:6px 0;margin-bottom:8px">Found <strong>'+validRows.length+'</strong> earnings records. Preview of first '+previewRows.length+':</div>'
+    prev.innerHTML='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px;font-size:10px;line-height:1.7">'
+      +'<div style="color:var(--tx2);margin-bottom:4px;font-weight:600;letter-spacing:.5px;text-transform:uppercase">Detected mapping</div>'
+      +'<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;color:var(--tx3)">'
+      +'<span>Amount column:</span><strong style="color:var(--acc2)">'+esc(amtKey)+'</strong>'
+      +'<span>Date column:</span><strong style="color:var(--acc2)">'+esc(dateKey)+'</strong>'
+      +'<span>Trip ID column:</span><strong style="color:'+(idKey==='(none)'?'var(--amb)':'var(--acc2)')+'">'+esc(idKey)+'</strong>'
+      +'</div></div>'
+      +'<div style="font-size:11px;padding:6px 0;margin-bottom:8px">'
+      +'<span style="color:var(--grn)">Found <strong>'+validRows.length+'</strong> rows.</span> '
+      +(dupeCount>0?'<span style="color:var(--amb)"><strong>'+dupeCount+'</strong> already imported &middot; </span>':'')
+      +'<span style="color:var(--tx2)"><strong>'+newCount+'</strong> new to import.</span>'
+      +(idKey==='(none)'?'<div style="color:var(--amb);margin-top:4px;font-size:10px">&#9888; No Trip ID column found \u2014 re-imports may create duplicates.</div>':'')
+      +'</div>'
       +'<div style="background:var(--sf);border-radius:6px;overflow:hidden;border:1px solid var(--bd)">'
-      +previewRows.map((r,i)=>{const amt=_getAmt(r);const date=r['Date']||r['Trip Date']||r['Start Date']||r['Reservation Date']||'';return'<div style="padding:7px 10px;'+(i<previewRows.length-1?'border-bottom:1px solid var(--bd)':'')+';display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--tx2)">'+(date||'No date')+'</span><span style="color:var(--grn);font-weight:700">'+fmt$(amt)+'</span></div>';}).join('')
+      +previewRows.map((r,i)=>{const amt=_getAmt(r);const date=dateKey!=='(none)'?r[dateKey]:'';const id=_getTripId(r);const isDupe=id&&existingIds.has(id);return'<div style="padding:7px 10px;'+(i<previewRows.length-1?'border-bottom:1px solid var(--bd)':'')+';display:flex;justify-content:space-between;align-items:center;font-size:11px"><span style="color:var(--tx2)">'+esc(date||'No date')+(id?' &middot; <span style="color:var(--tx3);font-size:10px">'+esc(id)+'</span>':'')+(isDupe?' <span style="color:var(--amb);font-size:9px;margin-left:4px">DUPE</span>':'')+'</span><span style="color:var(--grn);font-weight:700">'+fmt$(amt)+'</span></div>';}).join('')
       +'</div>';
   };
   reader.readAsText(file);
@@ -3450,16 +3494,31 @@ function importCSV(){
     const validRows=rows.filter(r=>_getAmt(r)>0);
     if(!validRows.length){toast('No earnings found. Columns: '+hdrs.slice(0,4).join(', ')+'...');return;}
     const ri=D.revImports()||[];
-    let count=0;
+    const existingIds=new Set(ri.map(r=>_getTripId(r)).filter(Boolean));
+    let count=0,skipped=0;
     validRows.forEach(r=>{
       const amt=_getAmt(r);
-      const date=r['Date']||r['Trip Date']||r['Start Date']||r['Reservation Date']||'';
-      ri.push({...r,amount:amt,date,imported:new Date().toISOString()});
+      const dateKey=_getDateKey(r);
+      const date=dateKey?r[dateKey]:'';
+      const tripId=_getTripId(r);
+      if(tripId&&existingIds.has(tripId)){skipped++;return;}
+      ri.push({...r,amount:amt,date,tripId:tripId||null,imported:new Date().toISOString()});
+      if(tripId)existingIds.add(tripId);
       count++;
     });
-    D.sRevImports(ri);logAct('CSV Imported',count+' records');toast('Imported '+count+' records');hideM();
+    D.sRevImports(ri);
+    // Mark current month as imported so banner hides
+    try{const tm=new Date().getFullYear()+'-'+(new Date().getMonth()+1).toString().padStart(2,'0');D.set('csvBanner_lastImport',tm);}catch(_){}
+    const msg='Imported '+count+' records'+(skipped>0?' ('+skipped+' duplicates skipped)':'');
+    logAct('CSV Imported',msg);toast(msg);hideM();
+    if(typeof renderDash==='function'&&document.getElementById('pg-dash'))renderDash();
   };
   reader.readAsText(file);
+}
+function dismissCsvBanner(){
+  const tm=new Date().getFullYear()+'-'+(new Date().getMonth()+1).toString().padStart(2,'0');
+  D.set('csvBanner_dismiss',tm);
+  const el=document.getElementById('csv-banner');if(el)el.remove();
 }
 
 // ── EXPORT ──
