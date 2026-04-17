@@ -2968,6 +2968,16 @@ function renderFin(){
     +'<div style="margin-top:8px"><a href="https://turo.com/us/en/profile/trips" target="_blank" class="btn btn-o btn-f btn-s" style="text-decoration:none;display:flex">Open Turo Earnings &#8599;</a></div>'
     +'<div class="sh" style="margin-top:14px"><span class="sh-t">Tax Estimate</span><span class="sh-l"></span></div>'
     +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:8px;line-height:1.6">Section 179 deduction available for vehicles over 6,000 lbs GVWR. Consult your CPA.</div><div class="cd-r"><span class="l">22% Bracket Savings</span><span class="v" style="color:var(--grn)">'+fmt$(Math.round(allExp*0.22))+'</span></div><div class="cd-r"><span class="l">32% Bracket Savings</span><span class="v" style="color:var(--grn)">'+fmt$(Math.round(allExp*0.32))+'</span></div><div style="font-size:9px;color:var(--tx3);margin-top:8px">Not tax advice &mdash; consult a CPA.</div></div>'
+    +'<div class="sh" style="margin-top:14px"><span class="sh-t">Schedule C Export</span><span class="sh-l"></span></div>'
+    +'<div class="cd"><div style="font-size:11px;color:var(--tx2);margin-bottom:10px;line-height:1.6">IRS Schedule C (Form 1040) line items \u2014 hand to your accountant. Revenue + expenses mapped to the correct lines for the selected tax year.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<select id="sc-yr" class="fi" style="flex:0 0 100px;padding:7px 10px;font-size:12px">'
+    +[now.getFullYear(),now.getFullYear()-1,now.getFullYear()-2].map(y=>'<option value="'+y+'"'+(y===now.getFullYear()-1?' selected':'')+'>'+y+'</option>').join('')
+    +'</select>'
+    +'<button class="btn btn-r btn-s" onclick="exportScheduleC(document.getElementById(\'sc-yr\').value)">Export Schedule C (CSV)</button>'
+    +'<button class="btn btn-o btn-s" onclick="previewScheduleC(document.getElementById(\'sc-yr\').value)">Preview</button>'
+    +'</div>'
+    +'<div id="sc-prev" style="margin-top:10px"></div></div>'
     +'</div></div>';
 
   // Chart - last 6 months actual (uses filtered b/e)
@@ -3615,6 +3625,113 @@ function exportICS(){
   toast('Exported '+b.length+' bookings. Import into Google/Apple Calendar.');
 }
 
+// ── SCHEDULE C (IRS Form 1040) EXPORT ──
+// Maps our expense categories to Schedule C Part II line numbers.
+// https://www.irs.gov/forms-pubs/about-schedule-c-form-1040
+function _scheduleCMap(){
+  return {
+    'Fuel':{line:'9',desc:'Car and truck expenses'},
+    'Gas':{line:'9',desc:'Car and truck expenses'},
+    'Oil Change':{line:'9',desc:'Car and truck expenses'},
+    'Tires':{line:'9',desc:'Car and truck expenses'},
+    'Maintenance':{line:'21',desc:'Repairs and maintenance'},
+    'Repair':{line:'21',desc:'Repairs and maintenance'},
+    'Repairs':{line:'21',desc:'Repairs and maintenance'},
+    'Damage Repair':{line:'21',desc:'Repairs and maintenance'},
+    'Insurance':{line:'15',desc:'Insurance (other than health)'},
+    'Car Wash':{line:'22',desc:'Supplies'},
+    'Detailing':{line:'22',desc:'Supplies'},
+    'Cleaning':{line:'22',desc:'Supplies'},
+    'Supplies':{line:'22',desc:'Supplies'},
+    'Registration':{line:'23',desc:'Taxes and licenses'},
+    'DMV':{line:'23',desc:'Taxes and licenses'},
+    'License':{line:'23',desc:'Taxes and licenses'},
+    'Tax':{line:'23',desc:'Taxes and licenses'},
+    'Taxes':{line:'23',desc:'Taxes and licenses'},
+    'Advertising':{line:'8',desc:'Advertising'},
+    'Marketing':{line:'8',desc:'Advertising'},
+    'Legal':{line:'17',desc:'Legal and professional services'},
+    'Accounting':{line:'17',desc:'Legal and professional services'},
+    'Professional':{line:'17',desc:'Legal and professional services'},
+    'Office':{line:'18',desc:'Office expense'},
+    'Parking':{line:'27a',desc:'Other expenses'},
+    'Tolls':{line:'27a',desc:'Other expenses'},
+    'Commission':{line:'10',desc:'Commissions and fees'},
+    'Turo Fee':{line:'10',desc:'Commissions and fees'},
+    'Depreciation':{line:'13',desc:'Depreciation and section 179'},
+    'Other':{line:'27a',desc:'Other expenses'}
+  };
+}
+function _buildScheduleC(year){
+  const yr=String(year);
+  const books=(D.books()||[]).filter(x=>x.start&&x.start.startsWith(yr));
+  const exps=(D.exps()||[]).filter(x=>x.date&&x.date.startsWith(yr));
+  const grossReceipts=books.reduce((s,x)=>s+Number(x.amount||0),0);
+  const map=_scheduleCMap();
+  const lineTotals={};
+  const lineDetail={};
+  exps.forEach(x=>{
+    const cat=x.category||'Other';
+    const m=map[cat]||map['Other'];
+    const key=m.line+'|'+m.desc;
+    lineTotals[key]=(lineTotals[key]||0)+Number(x.amount||0);
+    if(!lineDetail[key])lineDetail[key]=[];
+    lineDetail[key].push(x);
+  });
+  const totalExp=Object.values(lineTotals).reduce((s,v)=>s+v,0);
+  const netProfit=grossReceipts-totalExp;
+  return {year:yr,grossReceipts,bookCount:books.length,expCount:exps.length,lineTotals,lineDetail,totalExp,netProfit};
+}
+function previewScheduleC(year){
+  const data=_buildScheduleC(year);
+  const el=document.getElementById('sc-prev');if(!el)return;
+  if(!data.bookCount&&!data.expCount){el.innerHTML='<div style="font-size:11px;color:var(--amb);padding:8px;background:rgba(224,159,62,.08);border-radius:6px">No trips or expenses recorded for '+data.year+'.</div>';return;}
+  const rows=Object.entries(data.lineTotals).sort((a,b)=>{
+    const la=a[0].split('|')[0],lb=b[0].split('|')[0];
+    return parseFloat(la)-parseFloat(lb);
+  });
+  el.innerHTML='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:11px">'
+    +'<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:var(--acc2);margin-bottom:6px">Schedule C \u2014 Tax Year '+data.year+'</div>'
+    +'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bd)"><span>Line 1 \u2014 Gross receipts ('+data.bookCount+' trips)</span><strong style="color:var(--grn)">'+fmt$(data.grossReceipts)+'</strong></div>'
+    +rows.map(([k,v])=>{const [line,desc]=k.split('|');return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bd)"><span>Line '+line+' \u2014 '+esc(desc)+'</span><strong style="color:var(--red)">-'+fmt$(v)+'</strong></div>';}).join('')
+    +'<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:4px;border-top:2px solid var(--acc2)"><span style="font-weight:700">Line 31 \u2014 Net profit</span><strong style="color:'+(data.netProfit>=0?'var(--grn)':'var(--red)')+';font-size:13px">'+fmt$(data.netProfit)+'</strong></div>'
+    +'<div style="font-size:9px;color:var(--tx3);margin-top:6px">Not tax advice. Vehicle depreciation (Line 13) requires cost basis + method \u2014 ask your CPA.</div>'
+    +'</div>';
+}
+function exportScheduleC(year){
+  const data=_buildScheduleC(year);
+  if(!data.bookCount&&!data.expCount){toast('No data for '+data.year);return;}
+  const csvEsc=(s)=>{const v=String(s==null?'':s);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const out=[];
+  out.push(['Schedule C \u2014 Profit or Loss From Business (Sole Proprietorship)'].join(','));
+  out.push(['Form 1040 | Tax Year '+data.year+' | Business: Turo Vehicle Rental'].join(','));
+  out.push(['Generated '+new Date().toISOString().split('T')[0]+' by TuroFleetManager'].join(','));
+  out.push('');
+  out.push(['Line','Description','Amount'].map(csvEsc).join(','));
+  out.push(['1','Gross receipts or sales ('+data.bookCount+' trips)',data.grossReceipts.toFixed(2)].map(csvEsc).join(','));
+  out.push(['7','Gross income',data.grossReceipts.toFixed(2)].map(csvEsc).join(','));
+  out.push('');
+  out.push(['Part II \u2014 Expenses'].map(csvEsc).join(','));
+  const rows=Object.entries(data.lineTotals).sort((a,b)=>parseFloat(a[0].split('|')[0])-parseFloat(b[0].split('|')[0]));
+  rows.forEach(([k,v])=>{const [line,desc]=k.split('|');out.push([line,desc,v.toFixed(2)].map(csvEsc).join(','));});
+  out.push(['28','Total expenses',data.totalExp.toFixed(2)].map(csvEsc).join(','));
+  out.push(['31','Net profit or (loss)',data.netProfit.toFixed(2)].map(csvEsc).join(','));
+  out.push('');
+  out.push(['Expense detail \u2014 itemized'].map(csvEsc).join(','));
+  out.push(['Line','Schedule C Category','Date','Original Category','Amount','Notes'].map(csvEsc).join(','));
+  const f=D.fleet()||[];
+  Object.entries(data.lineDetail).sort((a,b)=>parseFloat(a[0].split('|')[0])-parseFloat(b[0].split('|')[0])).forEach(([k,items])=>{
+    const [line,desc]=k.split('|');
+    items.forEach(x=>{const c=f[x.ci]||{};const notes=[x.notes||'',[c.year,c.make,c.model].filter(Boolean).join(' ')].filter(Boolean).join(' \u2014 ');out.push([line,desc,x.date||'',x.category||'',Number(x.amount||0).toFixed(2),notes].map(csvEsc).join(','));});
+  });
+  const csv=out.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const fn='schedule-c-'+data.year+'.csv';
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);
+  logAct('Schedule C Exported',data.year+' \u2014 '+fmt$(data.netProfit)+' net');
+  toast('Exported '+fn);
+}
+
 // ── COMMAND PALETTE ──
 const CMDS=[
   {l:'Dashboard',h:'Navigate',a:()=>sw('dash',null)},
@@ -3635,6 +3752,7 @@ const CMDS=[
   {l:'Import Turo CSV',h:'Finances',a:()=>showM('csv')},
   {l:'Export Data',h:'Settings',a:()=>exportAll()},
   {l:'Export Calendar (.ics)',h:'Settings',a:()=>exportICS()},
+  {l:'Export Schedule C (Tax)',h:'Finances',a:()=>{sw('fin',null);setTimeout(()=>exportScheduleC(new Date().getFullYear()-1),300);}},
   {l:'Sign Out',h:'Account',a:()=>doLogout()},
 ];
 function openCmd(){document.getElementById('cmd-ov').classList.add('show');const i=document.getElementById('cmd-in');i.value='';i.focus();renderCmds('');}
