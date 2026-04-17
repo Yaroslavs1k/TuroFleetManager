@@ -1837,11 +1837,12 @@ async function lookupVIN(){
         const dLabel=delta<0?'below market median':delta===0?'at market median':'above market median';
         H+='<div style="padding:10px;background:rgba(0,0,0,.15);border-radius:6px;margin-bottom:10px;font-size:11px;color:var(--tx2)"><strong style="color:'+dCol+'">'+(delta>=0?'+':'')+fmt$(delta)+' ('+(deltaPct>=0?'+':'')+deltaPct+'%)</strong> vs median. This car is <strong style="color:'+dCol+'">'+dLabel+'</strong> of '+marketData.count+' comparable listings.</div>';
       }
-      // Top listings table
-      if(marketData.listings && marketData.listings.length){
-        H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:6px">TOP '+Math.min(marketData.listings.length,10)+' LOCAL LISTINGS</div>';
+      // Top listings table — only show listings with real prices (filter out "call for price" $0 entries)
+      const pricedListings=(marketData.listings||[]).filter(l=>l.price>0);
+      if(pricedListings.length){
+        H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--tx3);margin-bottom:6px">TOP '+pricedListings.length+' LOCAL LISTINGS (SORTED BY PRICE)</div>';
         H+='<div style="display:grid;grid-template-columns:1fr;gap:5px">';
-        marketData.listings.forEach(l=>{
+        pricedListings.sort((a,b)=>a.price-b.price).forEach(l=>{
           const diff=l.price-marketData.median_price;
           const dc=diff<=0?'var(--grn)':diff<marketData.median_price*0.08?'var(--tx3)':'var(--red)';
           H+='<div style="display:grid;grid-template-columns:90px 90px 1fr auto;gap:10px;padding:7px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;font-size:11px;align-items:center"><div style="font-family:\'Rajdhani\',sans-serif;font-weight:700;color:'+dc+'">'+fmt$(l.price)+'</div><div style="color:var(--tx3)">'+(l.miles?l.miles.toLocaleString()+' mi':'—')+'</div><div style="color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(l.dealer||'Unknown dealer')+' &bull; '+(l.city||'')+(l.state?', '+l.state:'')+'</div>'+(l.vdp_url?'<a href="'+l.vdp_url+'" target="_blank" class="btn btn-s btn-o" style="text-decoration:none;padding:3px 8px;font-size:10px">View</a>':'')+'</div>';
