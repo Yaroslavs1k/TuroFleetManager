@@ -1608,6 +1608,8 @@ async function lookupVIN(){
     // Returns real dealer listings for same year/make/model in ZIP radius.
     // This is the single biggest confidence upgrade — replaces segment-default math with actual market.
     let marketData=null;
+    let autoListingUrl='';
+    let autoListingMeta=null;
     try{
       const mcRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
       if(mcRes.ok){
@@ -1621,6 +1623,33 @@ async function lookupVIN(){
         }
       }
     }catch(e){/* offline or proxy down — fall back to depreciation math */}
+
+    // VIN-SPECIFIC LISTING LOOKUP — tries to find the exact dealer listing for this VIN.
+    // If found, auto-populates the Listing URL field so user doesn't need to paste.
+    // Uses MarketCheck's /search/car/active?vins= endpoint via the proxy action=listings.
+    // Only runs if user didn't already paste a URL manually.
+    if(!safeListingUrl){
+      try{
+        const lRes=await fetch('https://yeohfqzdgvhwyjmezdii.supabase.co/functions/v1/marketcheck-proxy?action=listings&vin='+encodeURIComponent(vin)+'&zip='+encodeURIComponent(zip));
+        if(lRes.ok){
+          const lJson=await lRes.json();
+          const firstListing=(lJson.listings||[])[0];
+          if(firstListing&&firstListing.vdp_url){
+            autoListingUrl=firstListing.vdp_url;
+            autoListingMeta={
+              dealer:firstListing.dealer?.name||'',
+              city:firstListing.dealer?.city||'',
+              state:firstListing.dealer?.state||'',
+              price:firstListing.price||null,
+              miles:firstListing.miles||null,
+              totalMatches:lJson.listings?.length||lJson.num_found||1
+            };
+            // Reflect in the input so user sees it was auto-filled
+            const luEl=document.getElementById('lu-url');if(luEl&&!luEl.value)luEl.value=autoListingUrl;
+          }
+        }
+      }catch(e){/* VIN not in MarketCheck index — user can paste manually */}
+    }
 
     // ── Classification ──
     const mkUP=cv.make.toUpperCase();
@@ -1883,7 +1912,7 @@ async function lookupVIN(){
     // so the negotiation card + PDF export can reconstruct the analysis without re-querying APIs.
     window._vinSnap={
       vin:vin,year:cv.year,make:cv.make,model:cv.model,trim:cv.trim||'',bodyStyle:cv.bodyClass||'',
-      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,listingUrl:safeListingUrl,
+      miles:Number(miles||0),zip:zip,askPrice:askPrice||0,listingUrl:safeListingUrl||autoListingUrl||'',listingAutoFound:!safeListingUrl&&!!autoListingUrl,listingDealer:autoListingMeta,
       verdict:qVerdict,tgt:tgt,mx:mx,wk:wk,profitMonth:profitMonth,riskScore:riskScore,riskLabel:riskLabel,
       breakEvenMonths:monthsBE,segLabel:segLabel,
       marketMedian:marketMedian,marketCompCount:(hasLiveMarket&&marketData)?marketData.count:0,
@@ -2154,18 +2183,28 @@ async function lookupVIN(){
     const mdUrl=encodeURIComponent(mdCap);
     const copyHandler='navigator.clipboard&&navigator.clipboard.writeText(\''+vin+'\').then(()=>toast(\'VIN copied \u2014 paste on form\'));';
     H+='<div class="sh"><span class="sh-t">Research Links</span><span class="sh-l"></span><span class="sh-a" onclick="'+copyHandler+'" title="Copy VIN to clipboard">&#128203; Copy VIN</span></div>';
-    // Listing access row — primary action if user pasted a listing URL, fallback to Google VIN search
-    if(safeListingUrl){
+    // Listing access row — prefer user's pasted URL, then auto-found via MarketCheck, then Google VIN search
+    const finalListingUrl=safeListingUrl||autoListingUrl||'';
+    if(finalListingUrl){
+      const isAuto=!safeListingUrl&&autoListingUrl;
+      const meta=autoListingMeta;
+      const dealerBlurb=(isAuto&&meta&&meta.dealer)
+        ?meta.dealer+(meta.city?' \u2014 '+meta.city+', '+(meta.state||''):'')+(meta.price?' &middot; $'+meta.price.toLocaleString():'')+(meta.miles?' &middot; '+meta.miles.toLocaleString()+' mi':'')
+        :'';
+      const autoBadge=isAuto?'<span style="background:var(--acc2);color:#0a0a0a;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;letter-spacing:1px">AUTO-FOUND</span>':'';
       H+='<div style="background:rgba(109,186,125,.08);border:1px solid rgba(109,186,125,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
-        +'<div style="flex:1;min-width:200px"><div style="font-size:10px;color:var(--tx3);letter-spacing:1px;text-transform:uppercase;font-weight:700">Listing saved</div><div style="font-size:11px;color:var(--tx2);word-break:break-all;margin-top:2px">'+esc(safeListingUrl.length>80?safeListingUrl.slice(0,80)+'\u2026':safeListingUrl)+'</div></div>'
-        +'<a class="btn btn-r" href="'+esc(safeListingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing &rarr;</a>'
+        +'<div style="flex:1;min-width:200px"><div style="font-size:10px;color:var(--tx3);letter-spacing:1px;text-transform:uppercase;font-weight:700">Listing Found'+autoBadge+'</div>'
+        +(dealerBlurb?'<div style="font-size:11px;color:var(--tx2);margin-top:2px">'+esc(dealerBlurb)+'</div>':'')
+        +'<div style="font-size:10px;color:var(--tx3);word-break:break-all;margin-top:3px">'+esc(finalListingUrl.length>80?finalListingUrl.slice(0,80)+'\u2026':finalListingUrl)+'</div></div>'
+        +'<a class="btn btn-r" href="'+esc(finalListingUrl)+'" target="_blank" rel="noopener" style="text-decoration:none">Open Listing &rarr;</a>'
         +'</div>';
     } else {
       H+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
-        +'<div style="flex:1;min-width:200px;font-size:11px;color:var(--tx3);line-height:1.5">No listing URL \u2014 hunt for it on the web by VIN.</div>'
+        +'<div style="flex:1;min-width:200px;font-size:11px;color:var(--tx3);line-height:1.5">This VIN isn\'t in MarketCheck\'s dealer index. Hunt for it on the web:</div>'
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-        +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22+for+sale" target="_blank" rel="noopener" style="text-decoration:none">Search Google by VIN</a>'
-        +'<a class="btn btn-o btn-s" href="https://www.autotempest.com/results?vin='+encodeURIComponent(vin)+'" target="_blank" rel="noopener" style="text-decoration:none">Search AutoTempest</a>'
+        +'<a class="btn btn-o btn-s" href="https://www.google.com/search?q=%22'+encodeURIComponent(vin)+'%22+for+sale" target="_blank" rel="noopener" style="text-decoration:none">Search Google</a>'
+        +'<a class="btn btn-o btn-s" href="https://www.autotempest.com/results?vin='+encodeURIComponent(vin)+'" target="_blank" rel="noopener" style="text-decoration:none">AutoTempest</a>'
+        +'<a class="btn btn-o btn-s" href="https://www.cars.com/research/'+encodeURIComponent((cv.make||'').toLowerCase().replace(/\s+/g,'_'))+'-'+encodeURIComponent((cv.model||'').toLowerCase().replace(/\s+/g,'_'))+'-'+cv.year+'/" target="_blank" rel="noopener" style="text-decoration:none">Cars.com</a>'
         +'</div></div>';
     }
     H+='<div style="font-size:10px;color:var(--tx3);margin-bottom:6px;line-height:1.5">Market-filtered (opens directly): <strong>Turo, AutoTempest</strong>. All other sites are form-only \u2014 click auto-copies VIN, paste on their form.</div>';
