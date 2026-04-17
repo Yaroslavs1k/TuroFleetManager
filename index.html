@@ -1875,7 +1875,25 @@ async function lookupVIN(){
     const baseMsrp=liveMsrp>0?liveMsrp:msrpEst;
     const anchorMsrp=baseMsrp+featurePremium;
     const chartYrs=Array.from({length:12},(_,i)=>i);
+    // Typical curve — anchored to REAL market data at current age when available.
+    // Year 0 = MSRP, year N (current age) = market median (actual avg-miles comp median),
+    // years before interpolate, years after apply generic depreciation from the market point.
+    // When no market data: fall back to generic segment DEP_Y from MSRP.
     const typicalVals=chartYrs.map(y=>{
+      if(y===0)return anchorMsrp;
+      if(hasLiveMarket&&marketData.median_price>0&&age>0){
+        const medianAtAge=marketData.median_price;
+        if(y<=age){
+          // Linear interp from MSRP at y=0 to market median at y=age
+          const t=y/age;
+          return Math.round(anchorMsrp*(1-t)+medianAtAge*t);
+        }
+        // Years past current — apply segment depreciation from market median
+        let v=medianAtAge;
+        for(let i=age;i<y&&(i-age)<DEP_Y.length;i++)v*=(1-DEP_Y[i-age]);
+        return Math.round(v);
+      }
+      // Fallback: generic segment curve from MSRP
       let v=anchorMsrp;
       for(let i=0;i<Math.min(y,DEP_Y.length);i++)v*=(1-DEP_Y[i]);
       return Math.round(v);
