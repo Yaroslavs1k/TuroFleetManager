@@ -937,6 +937,52 @@ const DB = {
     }catch(e){console.warn('DB.deleteWatchlist:',e.message);}
   },
 
+  // ── DEAL LOG (Supabase, added 2026-04-17 C5) ──
+  // Every VIN decode writes a row. Later the user updates the outcome (bought/passed/actual-profit).
+  // Over time this becomes the calibration dataset: "did the tool's predictions match reality?"
+  // Schema in edge-functions/watchlist-schema.md.
+  async logDeal(snap){
+    if(!sb||!CT||!snap||!snap.vin)return;
+    try{
+      const row={
+        team_id:CT.id,vin:snap.vin,
+        year:parseInt(snap.year)||null,
+        make:snap.make||null,model:snap.model||null,trim:snap.trim||null,
+        miles:snap.miles||0,ask_price:snap.askPrice||0,
+        verdict:snap.verdict||null,
+        opening_offer:snap.openingOffer||null,
+        range_low:snap.rangeLow||null,range_high:snap.rangeHigh||null,
+        walk_final:snap.walkFinal||null,
+        profit_month:snap.profitMonth||null,
+        risk_score:snap.riskScore||null,
+        data_confidence:snap.dataConfidence||null,
+        market_median:snap.marketMedian||null,
+        market_comps:snap.marketCompCount||0,
+        created_by:CU?.id||null
+      };
+      // Fire and forget — don't block lookup on deal log write
+      sb.from('deal_log').insert(row).then(r=>{if(r.error)console.warn('DB.logDeal:',r.error.message);});
+    }catch(e){console.warn('DB.logDeal:',e.message);}
+  },
+
+  async updateDealOutcome(vin,outcome,extras){
+    // Called when user marks a watchlist entry as bought/passed, or later supplies actual profit.
+    // Updates the MOST RECENT deal_log row for this VIN (that hasn't been given an outcome yet).
+    if(!sb||!CT||!vin)return;
+    try{
+      const patch={outcome,outcome_at:new Date().toISOString()};
+      if(extras?.actualPurchasePrice)patch.actual_purchase_price=extras.actualPurchasePrice;
+      if(extras?.actualMonthlyProfit)patch.actual_monthly_profit=extras.actualMonthlyProfit;
+      if(extras?.notes)patch.notes=extras.notes;
+      // Find the latest open deal_log row for this VIN
+      const{data,error}=await sb.from('deal_log').select('id').eq('team_id',CT.id).eq('vin',vin).is('outcome',null).order('looked_at',{ascending:false}).limit(1);
+      if(error)throw error;
+      if(data&&data.length){
+        await sb.from('deal_log').update(patch).eq('id',data[0].id);
+      }
+    }catch(e){console.warn('DB.updateDealOutcome:',e.message);}
+  },
+
   async getWatchlist(){
     // Fetch the team's watchlist from Supabase and merge into local. Returns merged list.
     // Local entries created offline (pre-Supabase-save) are preserved.
@@ -2900,6 +2946,8 @@ async function lookupVIN(){
     // Initialize live slider verdict display (Phase 5.5)
     if(typeof _vinSliderUpdate==='function'){const s=document.getElementById('vin-slider');if(s)_vinSliderUpdate(s.value);}
     logAct('VIN Lookup',cv.year+' '+cv.make+' '+cv.model);
+    // C5 2026-04-17: log every decode to deal_log for later calibration. Fire-and-forget.
+    if(typeof DB!=='undefined'&&DB.logDeal&&window._vinSnap)DB.logDeal(window._vinSnap);
 
     // Init depreciation chart after DOM is ready
     setTimeout(()=>{
@@ -5199,6 +5247,14 @@ function setWatchlistStatus(id,status){
   const w=list.find(x=>x.id===id);if(!w)return;
   w.status=status;w.updatedAt=new Date().toISOString();
   D.sSavedCars(list);
+  // C6 2026-04-17: sync to Supabase
+  if(typeof DB!=='undefined'&&DB.saveWatchlist)DB.saveWatchlist(w);
+  // C5 2026-04-17: update deal_log outcome when user marks bought/passed
+  if(typeof DB!=='undefined'&&DB.updateDealOutcome&&w.snapshot?.vin){
+    const outcomeMap={bought:'BOUGHT',passed:'PASSED',considering:null};
+    const outcome=outcomeMap[status];
+    if(outcome)DB.updateDealOutcome(w.snapshot.vin,outcome);
+  }
   if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
   else if(typeof renderWatchlist==='function')renderWatchlist();
   toast('Marked as '+status);
