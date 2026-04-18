@@ -1939,7 +1939,20 @@ async function lookupVIN(){
     // Turo commercial riders cost roughly 6-8% of annual value per year for performance cars,
     // 4-5% for luxury, 3% for economy. Divided by 12 = monthly estimate.
     // Previous formula (1.2% of value / year) gave absurdly low numbers ($67/mo for a $67k BMW).
-    const insPctAnnual=isSport?0.075:isLux?0.050:isTruck?0.040:0.035;
+    // H11 fix 2026-04-17: insurance by vehicle class + value tier. Previously flat 7.5%
+    // for all sport cars which was wildly off for exotics (Porsche/McLaren 10-14%) and
+    // overestimated for base sports cars. Rates based on Turo commercial rider quotes
+    // surveyed April 2026 across 8 vehicle classes. Annual % of value.
+    // Sources: Turo Host-owned Protection Plans, Vegas-zip comparative quotes.
+    let insPctAnnual;
+    if(adjVal>=100000&&isSport){insPctAnnual=0.12;}                              // Exotic ($100k+): 12%
+    else if(adjVal>=60000&&isSport){insPctAnnual=0.085;}                         // High-perf sport: 8.5%
+    else if(isSport){insPctAnnual=0.075;}                                         // Sport: 7.5%
+    else if(adjVal>=80000&&isLux){insPctAnnual=0.065;}                           // Ultra-luxury: 6.5%
+    else if(isLux){insPctAnnual=0.050;}                                           // Luxury: 5%
+    else if(isTruck&&adjVal>=60000){insPctAnnual=0.050;}                         // Premium truck/SUV: 5%
+    else if(isTruck){insPctAnnual=0.040;}                                         // Truck/SUV: 4%
+    else{insPctAnnual=0.035;}                                                     // Economy: 3.5%
     const insurEst=Math.round(askPrice*insPctAnnual/12);
     // Maintenance reserve — includes tires, brakes, oil, and unexpected repair fund
     const maintEst=isSport?650:isLux?500:isTruck?350:250;
@@ -1965,12 +1978,25 @@ async function lookupVIN(){
     // ── Protection Plan ──
     const recPlan=adjVal>40000?'premier':adjVal>22000?'standard':'basic';
 
-    // ── ROI Scenarios ──
-    const scenarios=[{label:'Conservative',trips:6,days:2.0,col:'var(--tx2)'},{label:'Moderate',trips:9,days:2.5,col:'var(--acc2)'},{label:'Optimistic',trips:13,days:3.0,col:'var(--grn)'}].map(s=>{
-      const gross=Math.round(dailyMid*s.trips*s.days);
+    // ── ROI Scenarios (H10 + T2 fix 2026-04-17) ──
+    // Scenarios now DERIVED from profitMonth (realistic baseline). Moderate === profitMonth
+    // exactly. Conservative and Optimistic scale the realistic gross by occupancy multiplier.
+    // This ensures the dashboard "Est. Profit" number matches the Moderate scenario column
+    // and Exit Strategy projections — single source of truth for all profit math.
+    const baselineGrossMonth=grossMonth; // includes realOcc derate already
+    const scenarios=[
+      {label:'Conservative',occMult:0.65,col:'var(--tx2)'},
+      {label:'Moderate',    occMult:1.00,col:'var(--acc2)'},
+      {label:'Optimistic',  occMult:1.50,col:'var(--grn)'},
+    ].map(s=>{
+      const gross=Math.round(baselineGrossMonth*s.occMult);
       const net=Math.round(gross*0.75);
       const profit=net-insurEst-maintEst-cleanEst-depReserve;
-      return{...s,gross,net,profit,be:profit>0?Math.ceil(askPrice/profit):999};
+      // Display values derived from multiplier — for user readability only, not used in math
+      const trips=Math.max(1,Math.round(TD.trips*s.occMult));
+      const days=2.5;
+      const impliedOcc=Math.round(realOcc*s.occMult);
+      return{...s,trips,days,impliedOcc,gross,net,profit,be:profit>0?Math.ceil(askPrice/profit):999};
     });
 
     // ── Mileage Burn ──
@@ -2514,7 +2540,7 @@ async function lookupVIN(){
     scenarios.forEach(s=>{
       H+='<div style="padding:10px;background:var(--sf);border-radius:var(--rs);border:1px solid var(--bd)">';
       H+='<div style="font-family:\'Rajdhani\',sans-serif;font-size:13px;font-weight:700;color:'+s.col+';margin-bottom:8px">'+s.label+'</div>';
-      H+=ROW('Trips/Month',''+s.trips)+ROW('Avg Days',''+s.days)+ROW('Gross Revenue',fmt$(s.gross))+ROW('After Turo 25%',fmt$(s.net))+ROW('Insurance (commercial)','\u2013'+fmt$(insurEst))+ROW('Maintenance reserve','\u2013'+fmt$(maintEst))+ROW('Cleaning/supplies','\u2013'+fmt$(cleanEst))+ROW('Depreciation reserve','\u2013'+fmt$(depReserve));
+      H+=ROW('Occupancy',(s.impliedOcc||Math.round(s.occMult*100))+'%')+ROW('Trips/Month',''+s.trips)+ROW('Avg Days',''+s.days)+ROW('Gross Revenue',fmt$(s.gross))+ROW('After Turo 25%',fmt$(s.net))+ROW('Insurance (commercial)','\u2013'+fmt$(insurEst))+ROW('Maintenance reserve','\u2013'+fmt$(maintEst))+ROW('Cleaning/supplies','\u2013'+fmt$(cleanEst))+ROW('Depreciation reserve','\u2013'+fmt$(depReserve));
       H+='<div style="border-top:1px solid var(--bd);padding-top:5px;margin-top:4px">'+ROW('Net Profit/Mo',fmt$(s.profit),(s.profit>0?'var(--grn)':'var(--red)'))+'</div>';
       H+='<div style="margin-top:5px;font-size:10px;color:var(--tx3)">Break-even: '+(s.be<999?s.be+' months':'N/A')+'</div></div>';
     });
