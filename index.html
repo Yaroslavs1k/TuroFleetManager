@@ -2344,10 +2344,17 @@ async function lookupVIN(){
       // Damage / risk adjustment note
       +(totalPenalty>0?'<div style="font-size:10px;color:var(--amb);background:rgba(224,159,62,.06);border-radius:6px;padding:5px 9px;margin-bottom:8px">\u26a0 Range reduced '+fmt$(totalPenalty)+' \u2014 '+(recallPenalty>0?recalls.length+' open recall'+(recalls.length>1?'s':'')+' (\u2013'+fmt$(recallPenalty)+')':'')+(recallPenalty>0&&riskPenalty>0?' &middot; ':'')+(riskPenalty>0?'risk '+riskScore+'/10 (\u2013'+fmt$(riskPenalty)+')':'')+'</div>':'')
       +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">'
-      +'<span>Est. Profit: <strong style="color:'+(profitMonth>0?'var(--grn)':'var(--red)')+'">'+fmt$(profitMonth)+'/mo</strong></span>'
+      +'<span>Est. Profit: <strong style="color:'+(profitMonth>0?'var(--grn)':'var(--red)')+'" title="('+fmt$(dailyMid)+'/day \u00d7 '+Math.round(TD.trips*2.5*(realOcc/100))+' trip-days/mo \u00d7 75% Turo fee) \u2212 '+fmt$(insurEst+maintEst+cleanEst+depReserve)+' expenses">'+fmt$(profitMonth)+'/mo</strong></span>'
       +'<span>Break-even: <strong>'+monthsBE+' mo</strong></span>'
       +'<span>Risk: <strong style="color:'+qColor+'">'+riskScore+'/10</strong></span>'
       +(hasLiveMarket?'<span>Market: <strong>'+marketData.count+' comps, '+fmt$(marketData.median_price)+' median</strong></span>':'')
+      +'</div>'
+      // H7 fix 2026-04-17: verify-live-rates callout. The profit estimate's weakest link is the
+      // daily rate assumption (from MARKETS config, not real-time). Link out to filtered Turo
+      // search so user can cross-check against current Vegas listings in 10 seconds.
+      +'<div style="background:rgba(109,186,125,.06);border:1px solid rgba(109,186,125,.25);border-radius:6px;padding:8px 11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div style="font-size:11px;color:var(--tx2);line-height:1.5">Estimate uses <strong style="color:var(--tx)">'+fmt$(dailyMid)+'/day avg</strong> from '+esc(mkt)+' market config. <strong>Verify</strong> by checking live Turo comps for '+esc(cv.make)+' '+esc(cv.model)+'.</div>'
+      +'<a href="https://turo.com/us/en/search?country=US&defaultZipCode='+encodeURIComponent(zip)+'&makes='+encodeURIComponent(cv.make)+'&models='+encodeURIComponent(cv.model)+'&itemsPerPage=50" target="_blank" rel="noopener" class="btn btn-o btn-s" style="text-decoration:none;white-space:nowrap">Check Live Turo \u2197</a>'
       +'</div>'
       +'<div style="font-size:11px;color:var(--tx2);line-height:1.7">'+qReasons.map(r=>'<div>• '+r+'</div>').join('')+'</div>'
       +'</div>'
