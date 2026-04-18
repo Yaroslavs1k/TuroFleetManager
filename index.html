@@ -903,6 +903,70 @@ const DB = {
       await DB.getFleet();
       await Promise.all([DB.getExps(),DB.getBooks(),DB.getMaint(),DB.getDetails()]);
     }catch(e){console.warn('DB.loadAll:',e.message);}
+  },
+
+  // ── WATCHLIST (Supabase team-scoped, added 2026-04-17 C6) ──
+  // Schema: watchlist(id text pk, team_id text, vin text, saved_at, updated_at,
+  //                   notes text, status text, snapshot_version int, snapshot jsonb,
+  //                   created_by text, unique(team_id, vin))
+  // Graceful degradation: if table missing or offline, caller falls back to localStorage.
+  async saveWatchlist(entry){
+    // Caller already wrote to localStorage via D.sSavedCars(). This is the Supabase mirror.
+    if(!sb||!CT||!entry||!entry.id||!entry.snapshot?.vin)return;
+    try{
+      const row={
+        id:entry.id,
+        team_id:CT.id,
+        vin:entry.snapshot.vin,
+        saved_at:entry.savedAt||new Date().toISOString(),
+        updated_at:entry.updatedAt||new Date().toISOString(),
+        notes:entry.notes||'',
+        status:entry.status||'considering',
+        snapshot_version:entry.snapshotVersion||1,
+        snapshot:entry.snapshot,
+        created_by:CU?.id||null
+      };
+      await trackSync(sb.from('watchlist').upsert(row,{onConflict:'team_id,vin'}).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.saveWatchlist:',e.message);/* table may not exist yet */}
+  },
+
+  async deleteWatchlist(id){
+    if(!sb||!CT||!id)return;
+    try{
+      await trackSync(sb.from('watchlist').delete().eq('id',id).eq('team_id',CT.id).then(r=>{if(r.error)throw r.error;return r;}));
+    }catch(e){console.warn('DB.deleteWatchlist:',e.message);}
+  },
+
+  async getWatchlist(){
+    // Fetch the team's watchlist from Supabase and merge into local. Returns merged list.
+    // Local entries created offline (pre-Supabase-save) are preserved.
+    if(!sb||!CT)return D.savedCars()||[];
+    try{
+      const{data,error}=await sb.from('watchlist').select('*').eq('team_id',CT.id).order('updated_at',{ascending:false});
+      if(error)throw error;
+      if(!data)return D.savedCars()||[];
+      // Convert Supabase rows back to watchlist entry shape
+      const remote=data.map(r=>({
+        id:r.id,
+        savedAt:r.saved_at,
+        updatedAt:r.updated_at,
+        notes:r.notes||'',
+        status:r.status||'considering',
+        snapshotVersion:r.snapshot_version,
+        snapshot:r.snapshot,
+        _createdBy:r.created_by
+      }));
+      // Merge: remote wins over local (remote is source of truth)
+      const local=D.savedCars()||[];
+      const remoteIds=new Set(remote.map(r=>r.id));
+      const localOnly=local.filter(l=>!remoteIds.has(l.id));
+      const merged=[...remote,...localOnly];
+      D.sSavedCars(merged);
+      return merged;
+    }catch(e){
+      console.warn('DB.getWatchlist:',e.message);
+      return D.savedCars()||[];
+    }
   }
 };
 
@@ -4888,6 +4952,8 @@ function saveVINToWatchlist(){
   if(existingIdx>=0){list[existingIdx]=entry;toast('Watchlist entry updated');}
   else{list.unshift(entry);toast('Saved to Watchlist \u2014 '+s.vName);}
   D.sSavedCars(list);
+  // C6 2026-04-17: mirror to Supabase for team-scoped sharing (dad sees Yaro's saves, etc.)
+  if(typeof DB!=='undefined'&&DB.saveWatchlist)DB.saveWatchlist(entry);
   if(typeof logAct==='function')logAct('Watchlist',(existingIdx>=0?'Updated ':'Saved ')+s.vName);
   _refreshSaveBtns();
   if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
@@ -4955,9 +5021,20 @@ function renderWatchlist(){
 }
 
 // Renders the Watchlist as a full TAB page (not a modal). Same card layout.
+// C6 2026-04-17: fetches team watchlist from Supabase in background, re-renders when done.
 function renderWatchPage(){
   const el=document.getElementById('pg-watch');if(!el)return;
   const list=D.savedCars()||[];
+  // Background refresh from Supabase — non-blocking, re-renders if data changed
+  if(typeof DB!=='undefined'&&DB.getWatchlist&&!window._watchlistSynced){
+    window._watchlistSynced=true;
+    DB.getWatchlist().then(merged=>{
+      if(merged.length!==list.length||JSON.stringify(merged.map(m=>m.id).sort())!==JSON.stringify(list.map(l=>l.id).sort())){
+        // Rerender with merged data
+        if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
+      }
+    });
+  }
   let H='<div class="sh"><span class="sh-t">Watchlist &mdash; Saved Cars</span><span class="sh-l"></span>'
     +'<span style="font-size:11px;color:var(--tx3);margin-left:8px">'+list.length+' saved</span>'
     +'<span class="sh-a" onclick="sw(\'vin\',null)">+ Decode a VIN</span></div>';
@@ -5096,6 +5173,8 @@ function removeWatchlist(id){
   if(!confirm('Remove this car from your watchlist?'))return;
   const list=D.savedCars().filter(w=>w.id!==id);
   D.sSavedCars(list);
+  // C6 2026-04-17: mirror delete to Supabase
+  if(typeof DB!=='undefined'&&DB.deleteWatchlist)DB.deleteWatchlist(id);
   if(document.getElementById('pg-watch')&&document.getElementById('pg-watch').classList.contains('a'))renderWatchPage();
   else if(typeof renderWatchlist==='function')renderWatchlist();
   _updateWatchBadge();
