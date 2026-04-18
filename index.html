@@ -1679,12 +1679,30 @@ async function lookupVIN(){
     // Returns real dealer listings for same year/make/model in ZIP radius.
     // This is the single biggest confidence upgrade — replaces segment-default math with actual market.
     let marketData=null;
+    let marketDataSource='live'; // live | cache | none
+    let marketCacheAgeDays=0;
     let autoListingUrl='';
     let autoListingMeta=null;
+    // H8+T3 fix 2026-04-17: per-VIN cache with 7-day TTL. When MarketCheck 422s or times out,
+    // we serve the last-known-good data for this VIN and surface a "cached N days ago" banner.
+    // Key: mc_cache_{vin}_{zip}. Stores {ts, data}.
+    const _cacheKey='mc_cache_'+vin+'_'+zip;
+    const _cacheTTL_ms=7*24*60*60*1000; // 7 days
+    function _readCache(){
+      try{const raw=localStorage.getItem(_cacheKey);if(!raw)return null;
+        const parsed=JSON.parse(raw);if(!parsed||!parsed.ts||!parsed.data)return null;
+        const age=Date.now()-parsed.ts;if(age>_cacheTTL_ms)return null;
+        return{...parsed,ageDays:Math.floor(age/(24*60*60*1000))};
+      }catch(e){return null;}
+    }
+    function _writeCache(data){
+      try{localStorage.setItem(_cacheKey,JSON.stringify({ts:Date.now(),data}));}catch(e){/* quota exceeded */}
+    }
     // Market data fetch with retry cascade — many failure modes to handle:
     //   1) Decode 422 → retry with NHTSA year/make/model override
     //   2) Count=0 from default path → retry with explicit override (forces nationwide cascade)
-    //   3) Still empty → give up gracefully, downstream code uses segment math
+    //   3) Still empty → fall back to per-VIN cache (last good data within 7 days)
+    //   4) Cache also empty → segment math (old behavior)
     async function _fetchMarket(url){
       try{const r=await fetch(url);if(!r.ok&&r.status!==422)return{status:r.status,json:null};const j=await r.json().catch(()=>null);return{status:r.status,json:j};}catch(e){return{status:0,json:null};}
     }
@@ -1702,11 +1720,25 @@ async function lookupVIN(){
       const mcJson=r.json;
       if(mcJson && mcJson.count>0 && mcJson.median_price>0){
         marketData=mcJson;
+        marketDataSource='live';
+        _writeCache(mcJson); // persist for next time
         if(!cv.basePrice && marketData.specs && marketData.specs.msrp){
           cv.basePrice=parseFloat(marketData.specs.msrp)||0;
         }
       }
-    }catch(e){/* offline or proxy down — fall back to depreciation math */}
+    }catch(e){/* offline or proxy down — fall through to cache */}
+    // Cache fallback — if live fetch failed or returned empty, try last-known-good.
+    if(!marketData){
+      const cached=_readCache();
+      if(cached&&cached.data&&cached.data.count>0&&cached.data.median_price>0){
+        marketData=cached.data;
+        marketDataSource='cache';
+        marketCacheAgeDays=cached.ageDays;
+        if(!cv.basePrice && marketData.specs && marketData.specs.msrp){
+          cv.basePrice=parseFloat(marketData.specs.msrp)||0;
+        }
+      }
+    }
 
     // VIN-SPECIFIC LISTING LOOKUP — tries to find the exact dealer listing for this VIN.
     // STRICT EXACT-VIN MATCH REQUIRED: verified 2026-04-17 that MarketCheck's `vins=`
@@ -2262,7 +2294,10 @@ async function lookupVIN(){
     const qBorder=qVerdict==='WORTH PURSUING'?'rgba(109,186,125,.3)':qVerdict==='WALK'?'rgba(196,122,106,.3)':'rgba(224,159,62,.3)';
     const qIcon=qVerdict==='WORTH PURSUING'?'✅':qVerdict==='WALK'?'❌':'⚠️';
     const qReasons=[];
-    if(hasLiveMarket)qReasons.push('✓ Valuation anchored on '+marketData.count+' live dealer comps (median '+fmt$(marketData.median_price)+')');
+    if(hasLiveMarket){
+      if(marketDataSource==='cache')qReasons.push('\u26A1 Valuation anchored on CACHED market data ('+marketCacheAgeDays+'d old, '+marketData.count+' comps, median '+fmt$(marketData.median_price)+') \u2014 live fetch unavailable, using last-known-good');
+      else qReasons.push('\u2713 Valuation anchored on '+marketData.count+' live dealer comps (median '+fmt$(marketData.median_price)+')');
+    }
     else if(!msrpIsReal)qReasons.push('⚠️ No live MSRP or market comps — numbers are segment-default estimates. Verify before trusting.');
     if(!milesProvided)qReasons.push('⚠️ Mileage not provided — valuation assumes '+expMiles.toLocaleString()+' mi. Enter actual mileage for accurate results.');
     if(belowMarketByMuch)qReasons.push('✓ Asking is '+marketDiscPct.toFixed(1)+'% below market median ('+fmt$(marketMedian-askPrice)+' discount)');
